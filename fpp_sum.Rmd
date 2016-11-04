@@ -1,0 +1,95 @@
+---
+title: "FPP Summary"
+author: "Lxy"
+date: "November 4, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(fpp)
+```
+
+## Dynamic regression models
+
+[^1]: Forecasting with cointegrated models is discussed in R.,  Harris and R. Sollis (2003). Applied Time Series Modelling and Forecasting. Chichester, UK: John Wiley & Sons.
+
+We allow errors from the regression to contain autocorrelation
+$$y_{t} = \beta_{0} + \beta_{1}x_{1,t} + ... + \beta_{k}x_{k,t} + n_{t}$$
+$n_{t}$ then follows the ARIMA model. Example if it follows ARIMA(1,1,1), then
+$$(1-\phi_{1}B)(1-B)n_{t} = (1+\theta_{1}B)e_{t}$$
+where $e_{t}$ is a white noise series
+
+### Estimation 
+
+We try to minimise sum of squared $e_{t}$ values (equivalent to using MLE), NOT the $n_{t}$ values. IF NOT, some issues: 
+
+* est. coeff $\hat{\beta_{0}}, ... \hat{\beta_{k}}$ no longer has best estimates
+* statistical tests not correct
+* AIC not a good guide to decide best model
+
+In most cases *p*-values of coeff will be too small, resulting in predictor variables appearing to be important, also know as "spurious regression".
+
+Check:
+
+1. Stationarity for both forecast variable $y_{t}$ and predictors $x_{1,t}, ... , x_{k,t}$
+    + unless non-stationary variables are co-integrated, i.e. linear combination between non stationary $y_{t}$ and predictors that is stationary [^1]
+
+2. Try to use same level of differencing for variables. 
+3. By differencing the ARIMA(1,1,1) error model above, we get ARMA errors as below.
+$$y_{t}' = \beta_{0} + \beta_{1}x_{1,t}' + ... + \beta_{k}x_{k,t}' + n_{t}'$$
+$$(1-\phi_{1}B)(1-B)n_{t}' = (1+\theta_{1}B)e_{t}$$
+where $y_{t}' = y_{t} - y_{t-1}, x_{t,i}' = x_{t,i}-x_{t-1,i} and n_{t}' = n_{t}-n_{t-1}$
+
+### Model Selection
+
+To estimate the coeffs $\hat{\beta_{0}}, ... \hat{\beta_{k}}$, we began with a proxy model, i.e. AR(2) or ARIMA(2,0,0)(1,0,0)~m~ for seasonal data.
+
+Steps:
+
+1. Box-Cox transformation if required
+2. Fit regression model with AR(2) for non-seasonal data or ARIMA(2,0,0)(1,0,0)m errors for seasonal data
+3. calculate errors $n_{t}$ from the fitted regression model and identify appropriate ARMA model for errors
+4. refit entire model using new ARMA model for errors
+5. check if $e_{t}$ series looks like white noise
+6. Select predictors based on lowest AIC
+
+#### Example: relationship between personal consumption expenditure and income in USA, 1970 to 2010
+
+```{r}
+plot(usconsumption, xlab="Year",
+     main="Quarterly changes in US consumption and personal income")
+
+```
+
+Data is considered stationary (percentage changes). So we first regress consuption on income assuming AR(2) errors.  
+** Arima function fit for ARIMA errors if argument xreg is used. different from arima function **
+
+```{r}
+fit <- Arima(usconsumption[,1], xreg=usconsumption[,2],
+             order=c(2,0,0)) 
+tsdisplay(arima.errors(fit), main="ARIMA errors")
+auto.arima(usconsumption[,1], xreg=usconsumption[,2], ic="aicc")
+```
+
+ARIMA errors plot show possibility for MA(3) and AR(2). auto.arima function indicates ARIMA(1,0,2) has the lowest AICc value. Refit model with ARIMA errors as below.
+
+```{r}
+(fit2 <- Arima(usconsumption[,1], xreg=usconsumption[,2],
+               order=c(1,0,2)))
+```
+
+A Ljung-Box test shows the residuals are uncorrelated.
+
+```{r}
+Box.test(residuals(fit2),fitdf=5,lag=10,type="Ljung")
+```
+
+We do a forecast for the next 8 quarters, assuming income change is the same as last 40 years
+```{r}
+fcast <- forecast(fit2,xreg=rep(mean(usconsumption[,2]),8), h=8)
+plot(fcast, main="Forecasts from regression with ARIMA(1,0,2) errors")
+```
+
+
+
