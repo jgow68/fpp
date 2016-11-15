@@ -176,7 +176,7 @@ fit4 <- auto.arima(insurance[4:40,1], xreg=Advert[4:40,1:4], d=0)
 fit <- auto.arima(insurance[,1], xreg=Advert[,1:2], d=0)
 ```
 
-```{r}
+```{r ARIMA model insurance quotes with lagged predictors(ads spent)}
 fit
 ```
 
@@ -189,7 +189,7 @@ where $y_{t}$ is the number of quotes in month t, $x_{t}$ is the ads spending in
 
 **Forecast using hte model assuming ads spending is 8 per month.**
 
-```{r}
+```{r forecast insurance ARIMA model with lag predictors}
 fc8 <- forecast(fit, xreg=cbind(rep(8,20),c(Advert[40,1],rep(8,19))), h=20)
 plot(fc8, main="Forecast quotes with advertising set to 8", ylab="Quotes")
 ```
