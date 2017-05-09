@@ -1,117 +1,159 @@
+# load library fpp
+library(fpp)
+library(xts)
+
 # test oil price, rigs, liquid demand & supply
 
+# Setup data and time series ----------------------------------------------
+
+### yet to be resolved
 eiadata = read.csv("eia extract (Oct16).csv", header=T)
-summary(eiadata)
+str(eiadata)
+eiadatats = ts(eiadata, start=c(1990,1,1), frequency=12)
+eiadatats
 
-# partition oil price data to start from 1/1/1994
-oilpr = eiadata$Brent_price[-c(1:48)]
-liqdem = eiadata$Liquid_demand[-c(1:48)]
-OPECsup = eiadata$OPEC_supply[-c(1:48)]
-nOPECsup = eiadata$nonOPEC_supply[-c(1:48)]
-liqsup = OPECsup + nOPECsup
-funda = liqdem - liqsup
-
-diffoil = c(NA, diff(oilpr))
-diffunda = c(NA, diff(funda))
-
-# scale data by their mean and s.d. respecvitvely
-oilpriceadj = scale(oilpr)
-fundaadj = scale(funda)
-
-# problem: liqdem and liqsup very similar
-pricefunda = lm(oilpr ~ liqdem + liqsup)
-summary(pricefunda)
-
-summary(lm(diffoil ~ funda)) # there is relationship, but different lengths in the first place, reasonable?
+eiadatats[eiadatats["date"]>=as.Date('2003-03-01') & eiadatats["date"]<=as.Date('2016-07-01')]
 
 
-# dynamic regression model ------------------------------------------------
+eiadata[,1] = as.Date(eiadata[,1], format = "%d/%m/%Y") # convert dates to date format
+eiadata_xts = xts(eiadata[,-1], order.by=as.Date(eiadata$date)) # form an extensible time series data
+summary(eiadata_xts)
 
-### create time series object of oil price and (demand-supply) change
-eiadata_changets = ts(cbind(diffoil,diffunda), start=1994, frequency=12)
-ts.plot(eiadata_changets)
 
-auto.arima(eiadata_changets[-1,1], xreg=eiadata_changets[-1,2], ic="aic") # shows ARIMA(1,0,0) to be the best fit
+# extract data from Mar 2003 till Oct 2016 for the rig count to oil price analysis
+testdata = eiadata_xts["2003-03-01::2016-10-01"]
+anyNA(testdata) # check for any NAs, sig fast than any(is.na(x))
+datats = as.ts(testdata)
+datats = ts(datats, start=c(2003,3), frequency=12)
 
-prfuts = Arima(eiadata_changets[-1,1], # fit AR(1) model to oil price  
-               xreg=eiadata_changets[-1,2], # external reg = (demand - supply) change
-               order=c(1,0,0)) 
-plot(forecast(prfuts, xreg=rep(0,12))) # forecast for the next 12 months assuming there is no supply/demand surplus
 
-### test the impact of lagged (demand-supply) change to oil prices
 
-eiadatats = ts(cbind(oilpr, funda), start=1994, frequency=12)
-summary(eiadatats)
+# ARIMA onshore / offshore rig with oil price regressors ------------------
 
-# create lagged predictors of funda (demand-supply)
-fundalag = cbind(funda,
-                 c(NA, funda[1:270]),
-                 c(NA,NA, funda[1:269]),
-                 c(NA,NA,NA, funda[1:268]),
-                 c(NA,NA,NA,NA, funda[1:267])
-                 )
+# (optional) try to see if seasonality is required
+plot.ts(grig)
+abline(v=c(2004:2016),lty=2) # seasonality seems to exist in normal years excl. crisis years 2008-09, 2014-16
+cor(datats[,1], datats[,2]) # shows negative correlation between oil price and rig count => bad
+ 
+# consider approach to analyze impact of lagged oil prices 
+oilpr = datats[,1] # oil price 
+lrig = datats[,28] # land rigs
+osrig = datats[,29] # offshore rigs
+grig = datats[,30] # global rigs
 
-fundalag = function(x) {
-    
+# (optional) correlation between oil price and rigs are positive => good sign
+cor(oilpr, lrig); cor(oilpr, osrig); cor(oilpr, grig)
+
+# create dataset with lagged oil price
+
+createlagdata = function(x, y) {
+  
+  c = as.matrix(y)
   b = x + 1
-  a = matrix(NA, nrow=271, ncol=b)
+  a = matrix(NA, nrow=nrow(c), ncol=b)
   
   for (i in 1:b){
-    a[,i] = c(rep(NA, i-1), funda)[1:length(funda)]
-      }
-  colnames(a) = paste("fundaLag", 0:x, sep="")
+    a[,i] = c(rep(NA, i-1), c)[1:length(c)]
+  }
+  colnames(a) = paste("y", 0:x, sep="")
   print(a)
 }
-  
-fundalag4 = fundalag(4) # create dat of funda with lag 0 to 4
-fundalag11 = fundalag(11) # create dat of funda with lag 0 to 11
 
-fundalagfit = function(x){ # pass the fundalag outputs to here
-  a = ncol(x)
-  # fit = list()
+oilprlag6 = createlagdata(6, oilpr) # oil price lag up to 6 months
+oilprlag12 = createlagdata(12, oilpr) # oil price lag up to 12 months
+oilprlag24 = createlagdata(24, oilpr) # oil price lag up to 24 months
+
+# identify number of oil price lags from model with the least aicc
+sapply(1:12, function(x) (auto.arima(grig, xreg=oilprlag12[,1:x])$aicc)) # Results show that more historical oil price gives better model for global rigs
+sapply(1:12, function(x) (auto.arima(osrig, xreg=oilprlag12[,1:x])$aicc)) # Results suggest to use max lag of oil price for offshore rig model
+
+
+# refit model with suitablenumber of oil price lag
+grigpr = auto.arima(grig, xreg=oilprlag6) # ARIMA(1,1,0)(1,0,0)[12]
+grigpr = auto.arima(grig, xreg=oilprlag12) # ARIMA(1,1,0)(2,0,0)[12)
+osrigpr = auto.arima(osrig, xreg=oilprlag12) # ARIMA(1,1,0)(2,0,0)[12]
+grigpr = auto.arima(grig, xreg=oilprlag12, stepwise=FALSE, approximation=FALSE) # same result: ARIMA(1,1,0)(2,0,0)[12] 
+
+
+# (optional) try to set model with non-seasonality
+grigpr_NS = auto.arima(grig, xreg=oilprlag12, seasonal=F) # ARIMA(2,1,0)
+plot(grigpr_NS$residuals)
+
+# (optional) residuals looks like white noise although the grigpr model's forecast is suspicious
+plot(grigpr$residuals)
+plot(osrigpr$residuals)
+Acf(grigpr$residuals)
+Acf(osrigpr$residuals)
+
+
+plot(forecast(grigpr, xreg=cbind(rep(50,6), # assume 50/bbl oil price for the next 6 months
+                                 c(oilprlag6[161], rep(50,5)),
+                                 c(oilprlag6[160:161], rep(50,4)),
+                                 c(oilprlag6[159:161], rep(50,3)),
+                                 c(oilprlag6[158:161], rep(50,2)),
+                                 c(oilprlag6[157:161], rep(50,1)),
+                                 c(oilprlag6[156:161])
+                                 )
+             )
+)
+                                 
+plotlag = function(x, y, z, f){
+  # x = oil price lag data, need to be same length as ARIMA model f
+  # y = oil price to be inputed
+  # z = number of months for repetition
+  # f = ARIMA model
   
-  for (i in 1:a){ # fit columns start from lag 0 to lag a
-    fit[i] = (auto.arima(oilpr[a:271], xreg=x[a:271,1:i], d=0))$aicc
-      }
+  a = ncol(x) # ncol of lag data, here ncol(oilprlag6) = 7
+  b = nrow(x)
+  historic = b # set range for historical data for predictor (oil price)
+  predictor = matrix(nrow=z, ncol=a)
   
-  b = which.min(fit) # choose model with lowest aicc
-  c= round(fit[b], 4) # indicate aicc values for best fit
-  paste("best fit is with lag", b-1, "with AICC", c)
-  
-  # print(which.min(ICval))
+  predictor[,1] = rep(y, z) # repeat oil price y for z months, say 50/bbl for 6 months
+  for (i in 2:a){
+    repetition = z + 1 # repetition = 7
+    if( repetition - i > 0){ 
+      predictor[,i] = c(x[historic:b], rep(y, repetition-i))
+      historic = historic - 1
+    } else {
+      predictor[,i] = c(x[historic:b])
+      historic = historic - 1
+    }
+      
+  }
+  # list("data" = predictor) can be used to return multiple information in lists
+  plot(forecast(f, xreg=predictor))
 }
 
-fundalagfit(fundalag11) 
-# lowest AICC for ARIMA fit of oil price and lagged funda is lag 2 & AICC 1557.0995
+# we assume 50/bbl price for 24 months
+forecast1 = plotlag(oilprlag12, 50, 24, grigpr) # forecast for global rigs using oil price with lag 12 months, looks suspicious
+plotlag(oilprlag12, 50, 24, osrigpr) # forecast for offshore rigs using oil price with lag 12 months
+plotlag(oilprlag12, 50, 24, grigpr_NS) # forecast shows a simple model
+
+predictor_1 = plotlag(oilprlag12, 50, 24, osrigpr) # for testing only, extract predictors from the plot function
+
+plot(forecast(osrigpr, xreg=predictor_1), xaxp=c(2003, 2018, 3), ylab="Rig count") # xaxp set start and end date with intervals set by xaxp
+osrig_fcst = forecast(osrigpr, xreg=predictor_1)
+abline(h=c(200,250,300), lty=3)
+abline(v=c(2003:2018), lty=3)
+
+# to identify col and data names
+which(colnames(datats)=="Global_L")
+grep("Global", colnames(datats))
+# match("Global_OS", names(datats)) not applicable in time series? but ok in df?
 
 
-prfundalag <- auto.arima(oilpr, xreg=fundalag11[,1:3], d=0) # refit model with funda lag 2, columns 1 to 3
-prfundalag
 
-## Test model for residuals
-# A Ljung-Box test for residuals correlation
-Box.test(residuals(fit2),fitdf=5,lag=10,type="Ljung")
-# Normality test for residuals
-prfundalagRES = prfundalag$residuals[-c(1:2)] # remove NAs
+# Testing new function in fpp - accuracy ----------------------------------
 
-qqnorm(prfundalagRES)
-qqline(prfundalagRES)
-jarque.bera.test(prfundalagRES) # reject H0, res dun folo Normal
-shapiro.test(prfundalagRES) # reject H0, res dun folo Normal
-acf(prfundalagRES)
-pacf(prfundalagRES)
-# dunno how to solve this HAHA
-# for dynamic regression models, we allow errors from regression to contain autocorrelation
-# but the condition is variables must be stationary?
+accuracy(grigpr)
+accuracy(grigpr_NS)
 
 
-## forecast model
-prfundalagFCST <- forecast(prfundalag, 
-                           xreg=cbind(rep(0,20), # forecast 20 months ahead assuming funda stays at 0
-                                c(fundalag11[271,1],rep(0,19)), # use actual values for first lag
-                                c(fundalag11[271,2], fundalag11[271,1], rep(0,18))), # use the actual values for first 2 lag
-                           h=20)
+# Neural Network Autoregression -------------------------------------------
 
-plot(prfundalagFCST, main="Forecast oil price with fundamanetal set to 0", ylab="Oil Price")
+plot(forecast(nnetar(osrig))) # Model: NNAR(1,1,2)[12] = yt-1, yt-12 inputs with 2 neurals in hidden layer
+
+
+
 
 
