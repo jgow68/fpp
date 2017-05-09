@@ -154,6 +154,29 @@ accuracy(grigpr_NS)
 plot(forecast(nnetar(osrig))) # Model: NNAR(1,1,2)[12] = yt-1, yt-12 inputs with 2 neurals in hidden layer
 
 
+# VAR model ---------------------------------------------------------------
+
+library(vars)
+VAR_variable = cbind(Brent=datats[,1],Wells=datats[,2],liquid_surplus=datats[,3]-datats[,4]-datats[,5]) # variables are Brent price, active wells, liquid demand - supply
+VAR_p1 = VAR(cbind(VAR_variable), p=1, type="both")
+summary(VAR_p1)
+
+ts.plot(VAR_variable)
+
+# check if data contains non-stationary components 
+summary(ur.df(VAR_variable[, 1], type = "drift", lags = 10, selectlags = "AIC")) # do not reject H0
+summary(ur.df(VAR_variable[, 2], type = "drift", lags = 10, selectlags = "AIC")) # do not reject H0
+summary(ur.df(VAR_variable[, 3], type = "drift", lags = 10, selectlags = "AIC")) # do not reject H0
+# * need to check for different types?
+# https://stats.stackexchange.com/questions/24072/interpreting-rs-ur-df-dickey-fuller-unit-root-test-results
+
+# select order of the model
+VARselect(VAR_variable, lag.max = 10, type="both")
+
+# check co-integration
+summary(ca.jo(VAR_variable, type = "eigen", ecdet = "const", K = 7)) # K= lag length, retrieved from the optimal lag length
+summary(ca.jo(x, type = "trace", ecdet = "const", K = 7))
 
 
-
+# subsequent steps
+# https://stats.stackexchange.com/questions/191851/var-forecasting-methodology
