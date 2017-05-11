@@ -157,26 +157,75 @@ plot(forecast(nnetar(osrig))) # Model: NNAR(1,1,2)[12] = yt-1, yt-12 inputs with
 # VAR model ---------------------------------------------------------------
 
 library(vars)
+library(fpp)
 VAR_variable = cbind(Brent=datats[,1],Wells=datats[,2],liquid_surplus=datats[,3]-datats[,4]-datats[,5]) # variables are Brent price, active wells, liquid demand - supply
 VAR_p1 = VAR(cbind(VAR_variable), p=1, type="both")
 summary(VAR_p1)
+serial.test(VAR_p1, lags.pt=10, type="PT.asymptotic")
 
-ts.plot(VAR_variable)
+# VAR(4) passes the test, no serial correlation
+VAR_p4 = VAR(cbind(VAR_variable), p=4, type="both")
+serial.test(VAR_p4, lags.pt=10, type="PT.asymptotic") 
+summary(VAR_p4)
+plot(forecast(VAR_p4))
 
 # check if data contains non-stationary components 
+
+# need to check for different types?
+# https://stats.stackexchange.com/questions/24072/interpreting-rs-ur-df-dickey-fuller-unit-root-test-results
+
+# type="none": delta y(t) = gamma * y(t-1) + e(t) (formula from Enders p. 208)
+# H0: gamma=0, unit root is present, data is random walk, check tau
+summary(ur.df(VAR_variable[, 1], type = "none", lags = 10, selectlags = "AIC")) # do not reject H0
+
+
+# type = "drift": : delta y(t) = a0 + gamma * y(t-1) + e(t) (formula from Enders p. 208)
+# H0: gamma=0, check tau2
+# H0: a0=gamma=0, check phi1
 summary(ur.df(VAR_variable[, 1], type = "drift", lags = 10, selectlags = "AIC")) # do not reject H0
 summary(ur.df(VAR_variable[, 2], type = "drift", lags = 10, selectlags = "AIC")) # do not reject H0
 summary(ur.df(VAR_variable[, 3], type = "drift", lags = 10, selectlags = "AIC")) # do not reject H0
-# * need to check for different types?
-# https://stats.stackexchange.com/questions/24072/interpreting-rs-ur-df-dickey-fuller-unit-root-test-results
+
+
+
+#  type="trend": delta y(t) = a0 + gamma * y(t-1) + a2(t) e(t) (formula from Enders p. 208)
+# tau: gamma=0
+# phi3: gamma=a2=0
+# phi2: a0=gamma=a2=0
+
+summary(ur.df(VAR_variable[, 1], type = "trend", lags = 10, selectlags = "AIC")) # do not reject H0
+
 
 # select order of the model
 VARselect(VAR_variable, lag.max = 10, type="both")
 
 # check co-integration
+jo_eigen_test= ca.jo(VAR_variable, type = "eigen", ecdet = "const", K = 7)
 summary(ca.jo(VAR_variable, type = "eigen", ecdet = "const", K = 7)) # K= lag length, retrieved from the optimal lag length
-summary(ca.jo(x, type = "trace", ecdet = "const", K = 7))
+# here we have 3 variables, so will test from r= 0 to 3-1
+# 3 H0 tests, conclude r=1
 
+
+summary(ca.jo(VAR_variable, type = "trace", ecdet = "const", K = 7)) # also concludes r=1
+
+# estimate VECM (vector error correction model) with r order of cointegration
+vecm = cajorls(jo_eigen_test, r=1)
+vecm$rlm$coefficients[,1] # model coefficients for Brent price difference
+
+length(VAR_variable) #492/3 = 164
+VAR_variable[158:164,] # last 7 rows
+diff(VAR_variable[158:164,]) # create the difference for 6 rows
+
+c(t(apply(diff(VAR_variable[158:164,]), 2, rev)))
+
+vecm$rlm$coefficients[,1] %*% c(1, t(apply(diff(VAR_variable[157:163,]), 2, rev))) # predicted Brent differential for given past 6 days data
+VAR_variable[164,1]; VAR_variable[163,1]; VAR_variable[163,1] + vecm$rlm$coefficients[,1] %*% c(1, t(apply(diff(VAR_variable[157:163,]), 2, rev)))
+
+# convert the VECM to VAR model, to use the predict function
+con_vec2var = vec2var(jo_eigen_test, r=1)
+plot(predict(con_vec2var))
+serial.test(con_vec2var,lags.pt=10)
+plot(irf(con_vec2var)) # impulse response function
 
 # subsequent steps
 # https://stats.stackexchange.com/questions/191851/var-forecasting-methodology
