@@ -157,27 +157,59 @@ plot(forecast(nnetar(osrig))) # Model: NNAR(1,1,2)[12] = yt-1, yt-12 inputs with
 # VAR model ---------------------------------------------------------------
 
 library(vars)
-library(fpp)
-VAR_variable = cbind(Brent=datats[,1],Wells=datats[,2],liquid_surplus=datats[,3]-datats[,4]-datats[,5]) # variables are Brent price, active wells, liquid demand - supply
-VAR_p1 = VAR(cbind(VAR_variable), p=1, type="both")
+
+VAR_variable = cbind(Brent=datats[,1],Wells=datats[,2],liquid_surplus=datats[,3]-datats[,4]-datats[,5]) 
+# variables are Brent price, active wells, liquid demand - supply
+
+#### NEXT STEP (yet to be done), add more variables, i.e. US/China GDP growth, steel price
+
+# check stationarity of data
+
+ts.plot(diff(VAR_variable[,1]))
+acf(diff(VAR_variable[,1])) # considered 0 correologram? spike at initial
+
+ts.plot(diff(VAR_variable[,2]))
+acf(diff(VAR_variable[,2])) # considered 0 correologram? spike at initial
+
+ts.plot(diff(VAR_variable[,3]))
+acf(diff(VAR_variable[,3])) # seasonal spike?
+
+# then do unit root test, check if delta t has drift or trend
+# problem with unit root test, low power, structural break (can use Perron test)
+
+# then select order of model, using VARselect? or compare SC / F-test (log-likelihood)
+
+# check for serial correlation?
+
+
+
+# select order of the model
+VARselect(VAR_variable, lag.max = 10, type="both") # AIC recommend p=7, BIC recommend p=1
+VARselect(diff(diff(VAR_variable)), lag.max = 10, type="both") # AIC recommend p=7, BIC recommend p=2
+
+# try from p=1 to p=7, stop at first test that passes the serial correlation test, H0: no autocorrelation
+VAR_p1 = VAR(VAR_variable, p=1, type="both")
 summary(VAR_p1)
 serial.test(VAR_p1, lags.pt=10, type="PT.asymptotic")
+plot(forecast(VAR_p1))
 
 # VAR(4) passes the test, no serial correlation
-VAR_p4 = VAR(cbind(VAR_variable), p=4, type="both")
+VAR_p4 = VAR(VAR_variable, p=4, type="both")
 serial.test(VAR_p4, lags.pt=10, type="PT.asymptotic") 
 summary(VAR_p4)
 plot(forecast(VAR_p4))
 
-# check if data contains non-stationary components 
+
 
 # need to check for different types?
 # https://stats.stackexchange.com/questions/24072/interpreting-rs-ur-df-dickey-fuller-unit-root-test-results
 
+# brent and wells doesn't seem to have trend or drift, surplus seems like random walk
+
 # type="none": delta y(t) = gamma * y(t-1) + e(t) (formula from Enders p. 208)
 # H0: gamma=0, unit root is present, data is random walk, check tau
-summary(ur.df(VAR_variable[, 1], type = "none", lags = 10, selectlags = "AIC")) # do not reject H0
-
+summary(ur.df(VAR_variable[, 1], type = "none", lags = 10, selectlags = "AIC")) # do not reject H0, => random walk?
+summary(ur.df(diff(diff(VAR_variable[, 1])), type = "none", lags = 10, selectlags = "AIC")) # reject H0
 
 # type = "drift": : delta y(t) = a0 + gamma * y(t-1) + e(t) (formula from Enders p. 208)
 # H0: gamma=0, check tau2
@@ -196,17 +228,19 @@ summary(ur.df(VAR_variable[, 3], type = "drift", lags = 10, selectlags = "AIC"))
 summary(ur.df(VAR_variable[, 1], type = "trend", lags = 10, selectlags = "AIC")) # do not reject H0
 
 
-# select order of the model
-VARselect(VAR_variable, lag.max = 10, type="both")
+
+# co-integration test - VECM pre-check ------------------------------------
 
 # check co-integration
-jo_eigen_test= ca.jo(VAR_variable, type = "eigen", ecdet = "const", K = 7)
-summary(ca.jo(VAR_variable, type = "eigen", ecdet = "const", K = 7)) # K= lag length, retrieved from the optimal lag length
+jo_eigen_test= ca.jo(VAR_variable, type = "eigen", ecdet = "const", K = 4) # K= lag length, retrieved from the optimal lag length
+summary(jo_eigen_test)
 # here we have 3 variables, so will test from r= 0 to 3-1
 # 3 H0 tests, conclude r=1
 
+summary(ca.jo(VAR_variable, type = "trace", ecdet = "const", K = 4)) # also concludes r=1
 
-summary(ca.jo(VAR_variable, type = "trace", ecdet = "const", K = 7)) # also concludes r=1
+
+# est VECM ----------------------------------------------------------------
 
 # estimate VECM (vector error correction model) with r order of cointegration
 vecm = cajorls(jo_eigen_test, r=1)
