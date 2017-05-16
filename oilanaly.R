@@ -6,13 +6,15 @@ library(xts)
 
 # Setup data and time series ----------------------------------------------
 
-### yet to be resolved
 eiadata = read.csv("eia extract (Oct16).csv", header=T)
 str(eiadata)
-eiadatats = ts(eiadata, start=c(1990,1,1), frequency=12)
+eiadatats = ts(eiadata, start=c(1990,1,1), frequency=12) # created new first column with dates!?
 eiadatats
+summary(eiadatats)
 
-eiadatats[eiadatats["date"]>=as.Date('2003-03-01') & eiadatats["date"]<=as.Date('2016-07-01')]
+datats = window(eiadatats,c(2003,3), c(2016,10)) ## Note: China, USA GDP data ends in dec 2015
+summary(datats)
+datats = datats[,-1] # delete the column with dates
 
 
 eiadata[,1] = as.Date(eiadata[,1], format = "%d/%m/%Y") # convert dates to date format
@@ -25,8 +27,9 @@ testdata = eiadata_xts["2003-03-01::2016-10-01"]
 anyNA(testdata) # check for any NAs, sig fast than any(is.na(x))
 datats = as.ts(testdata)
 datats = ts(datats, start=c(2003,3), frequency=12)
-
-
+head(datats)
+tail(datats)
+str(datats)
 
 # ARIMA onshore / offshore rig with oil price regressors ------------------
 
