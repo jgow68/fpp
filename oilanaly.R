@@ -16,6 +16,7 @@ datats = window(eiadatats,c(2003,3), c(2016,10)) ## Note: China, USA GDP data en
 summary(datats)
 datats = datats[,-1] # delete the column with dates
 
+### not needed
 
 eiadata[,1] = as.Date(eiadata[,1], format = "%d/%m/%Y") # convert dates to date format
 eiadata_xts = xts(eiadata[,-1], order.by=as.Date(eiadata$date)) # form an extensible time series data
@@ -27,9 +28,19 @@ testdata = eiadata_xts["2003-03-01::2016-10-01"]
 anyNA(testdata) # check for any NAs, sig fast than any(is.na(x))
 datats = as.ts(testdata)
 datats = ts(datats, start=c(2003,3), frequency=12)
-head(datats)
-tail(datats)
-str(datats)
+
+# linear regression time series -------------------------------------------
+
+ts_model = tslm(Active_well ~ Brent_price, data=datats)
+plot(Active_well ~ Brent_price, data=datats)
+abline(ts_model)
+summary(ts_model)
+
+# scenario based forecasting, set brent price as 40 for future 3 months to forecast well
+plot(forecast(ts_model, newdata = data.frame(Brent_price = c(40,40,40)))) # dont look right
+
+# may not be correct, shud do percentage change of well vs poc brent
+
 
 # ARIMA onshore / offshore rig with oil price regressors ------------------
 
@@ -169,13 +180,15 @@ VAR_variable = cbind(Brent=datats[,1],Wells=datats[,2],liquid_surplus=datats[,3]
 # check stationarity of data
 
 ts.plot(diff(VAR_variable[,1]))
-acf(diff(VAR_variable[,1])) # considered 0 correologram? spike at initial
+acf(diff(VAR_variable[,1])) # considered 0 correologram? spike at initial? is this correct? or we shud check residuals?
 
 ts.plot(diff(VAR_variable[,2]))
 acf(diff(VAR_variable[,2])) # considered 0 correologram? spike at initial
 
 ts.plot(diff(VAR_variable[,3]))
 acf(diff(VAR_variable[,3])) # seasonal spike?
+pacf(diff(VAR_variable[,3])) # seasonal spike?
+
 
 # then do unit root test, check if delta t has drift or trend
 # problem with unit root test, low power, structural break (can use Perron test)
