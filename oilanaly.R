@@ -41,6 +41,68 @@ plot(forecast(ts_model, newdata = data.frame(Brent_price = c(40,40,40)))) # dont
 
 # may not be correct, shud do percentage change of well vs poc brent
 
+ts_res = ts(resid(ts_model), start=c(2003,3), frequency=12)
+acf(ts_res) # gradual decline up til lag 2? => MA(2)
+pacf(ts_res) # one spike at lag 0 (N/A)? => no AR component
+
+# try to use differencing on both Brent price and well demand
+diff_brent = diff(datats[,1])
+diff_well = diff(datats[,2])
+ts_model_diff = tslm(diff_well ~ diff_brent)
+ts_res_diff = ts(resid(ts_model_diff), start=c(2003,4), frequency=12)
+plot(ts_res_diff)
+
+CV(ts_model_diff) # shows CV, AIC, BIC, adj Rsquared for lm/tslm
+
+dwtest(ts_model_diff, alt="two.sided") # reject H0, there is some autocorrelation in residuals
+
+# plot histogram of residuals, and check normality graphically
+hist(ts_res_diff)
+x = -200:200
+lines(x, 5000*dnorm(x,0,sd(ts_res_diff)),col=2)
+
+
+# using the package fpp to check the autocorrelation of residuals
+par(mfrow=c(1,2))
+Acf(ts_res_diff) # spike at lag 1,2,3 => residuals show MA(3)? makes sense? more errors on residuals correlation
+Pacf(ts_res_diff) # spike at lag 1,2 => residuals show AR(2)
+
+# we fit ARMA (2,3)
+arima_model_diff = Arima(diff_well, xreg=diff_brent, order=c(2,0,3)) # order differncing set to 0
+arima_res_diff = ts(resid(arima_model_diff), start=c(2003,4), frequency=12)
+Acf(arima_res_diff)
+Pacf(arima_res_diff)
+# resiudals graphical check OK
+summary(arima_model_diff)
+
+par(mfrow=c(1,1))
+forecast(arima_model_diff, xreg=c(rep(0,12)) ,level=0.95) # here xreg is diff_brent
+
+
+# other checks to complement acf/pacf -------------------------------------
+
+
+# Checking for the presence of pulses and level shifts; package(tsoutliers)
+# AND seasonal pulses AND local time trends AND error variance constancy
+# fit structural time series model to check variance of seasonal component; stats::StructTS or package(stsm)
+
+library(tsoutliers)
+data_outliers = tso(diff_well)
+data_outliers # detect outliers
+plot(data_outliers)
+plot(tso(datats[,2])) # totally useless
+
+
+
+library(strucchange)
+breakpoints(diff_well~1) # detect level shift / structural changes of the differenced data
+breakpoints(datats[,2]~1) # active well time series
+
+# fit ARMA model ----------------------------------------------------------
+
+
+
+
 
 # ARIMA onshore / offshore rig with oil price regressors ------------------
 
