@@ -308,6 +308,12 @@ summary(ur.df(VAR_variable[, 1], type = "trend", lags = 10, selectlags = "AIC"))
 
 
 # co-integration test - VECM pre-check ------------------------------------
+# it there exists a linear combination between time series of I(1) to arrive at I(0), then the series are co-integrated
+# few options to test for co-integration:if there exists
+# Engle–Granger two-step method, est. y_t = \beta x_t + e_t, where y_t & x_t are non-stationary and cointegrated,
+# then test e_t for stationarity using Dickey–Fuller test, Phillips–Perron test
+# Johansen test, subject to asymptotics for small samples should use  Auto Regressive Distributed Lags (ARDL)
+#, Phillips–Ouliaris cointegration test
 
 # check co-integration
 jo_eigen_test= ca.jo(VAR_variable, type = "eigen", ecdet = "const", K = 4) # K= lag length, retrieved from the optimal lag length
