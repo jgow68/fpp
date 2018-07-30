@@ -1,59 +1,614 @@
-data = read.csv("ConsolAD_Apr18.csv")
-
+# data = read.csv("ConsolAD_Apr18.csv")
+data = read.csv("ConsolAD_Jun18.csv")
 
 # Extract and form df -----------------------------------------------------
 
 str(data)
 
-training_data = cbind.data.frame(data$Auction.Date, data$Brand, data$Model.Group,
-                                 data$Adj..Var.,
-                                 data$Reserve.Price, data$Final.bid.price,
-                                 data$Adj..PG, data$Adj..ERP,
-                                 data$Manufacturing.Year, data$Mileage,data$Vehicle.Age,
-                                 data$Auction.Status,
-                                 data$MUV.Grade, # first grading scheme
-                                 data$VAS.Exterior.Grade, data$VAS.Interior.Grade, # second grading scheme
+training_data = cbind.data.frame(data$Reserve.Price, data$Auction.Date, data$Auction.Year, 
+                                 data$Auction.Month, data$Auction.Quarter,
+                                 data$Brand, data$Model.Group,
+                                 data$Live.Auction...X.Change,
+                                 data$Final.bid.price,
+                                 data$Adj..Var., # adj. in Excel
+                                 data$Adj..PG, data$Adj..ERP, # need to import from PG
+                                 data$Auct.Freq, # adj. in Excel
+                                 data$Manufacturing.Year, data$Mileage, data$Vehicle.Age,
+                                 data$Auction.Status, data$Vehicle.Location,
+                                 # data$MUV.Grade, # first grading scheme
+                                 # data$VAS.Exterior.Grade, data$VAS.Interior.Grade, # second grading scheme
                                  # third grading scheme
                                  data$MOS.Electrical.Rating, data$MOS.Engine.Rating, data$MOS.Exterior.Rating,
                                  data$MOS.Gearbox.Rating, data$MOS.Interior.Rating, data$MOS.Undercarriage.Rating,
                                  data$MOS.Structure.Rating, data$MOS.Flood.Rating
                                   ) 
-names(training_data) = c("Date", "Brand", "Model_Grp", 
+names(training_data) = c("Res.Price", "Date", "AuctY",
+                         "AuctM", "AuctQ",
+                         "Brand", "Model_Grp", 
+                         "Live Auct/X-Chg",
+                         "Final.Price",
                          "Variant",
-                         "Res.Price", "Final.Price",
                          "Price.Guide", "ERP",
+                         'Auct.Freq',
                          "Manf.Yr", "Mileage", "Age",
-                         "Auct.Stat",
-                         "Grade",
-                         "Ext", "Int",
+                         "Auct.Stat", "Veh Loc",
+                         # "Grade",
+                         # "Ext", "Int",
                          "Elect.R", "Eng.R", "Ext.R",
                          "Gearb.R", "Int.R", "UC.R",
                          "Struct.R", "Flood.R"
 )
 
-str(training_data)
 
-training_data = dplyr::filter(training_data, Auct.Stat!="Withdrawn") # filtered out fields without reserve price
-sum(is.na(training_data$Res.Price)) # check N/As for reserve price
+training_data$AuctY = factor(training_data$AuctY, ordered = TRUE, levels=c(2013, 2014, 2015, 2016, 2017, 2018))
+training_data$AuctM = factor(training_data$AuctM, ordered = TRUE, 
+                             levels=c("Jan","Feb","Mar", "Apr","May","Jun", "Jul","Aug","Sep", "Oct","Nov","Dec")
+                             )
+training_data$AuctQ = factor(training_data$AuctQ, ordered = TRUE, levels=c("Q1", "Q2", "Q3", "Q4"))
+levels(training_data$Manf.Yr)
 
-training_data$Res.Price = as.numeric(levels(training_data$Res.Price))[training_data$Res.Price]
-training_data$Mileage = as.numeric(levels(training_data$Mileage))[training_data$Mileage]
+
+training_data$Manf.Yr = as.numeric(levels(training_data$Manf.Yr))[training_data$Manf.Yr]
+training_data = dplyr::filter(training_data, (Manf.Yr >= 2000) & !is.na(Manf.Yr))
+training_data$Manf.Yr = factor(training_data$Manf.Yr, ordered = TRUE, 
+                            levels=c(2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
+                                     2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018)
+                            )
+
+training_data$Brand = as.factor(toupper(trimws(training_data$Brand)))
+training_data$Model_Grp = as.factor(toupper(trimws(training_data$Model_Grp)))
+training_data$Variant = as.factor(toupper(trimws(training_data$Variant)))
+training_data$Auct.Stat = as.factor(toupper(trimws(training_data$Auct.Stat)))
+
+training_data$Res.Price = as.numeric(gsub(",", "", levels(training_data$Res.Price)))[training_data$Res.Price]
+training_data$Final.Price = as.numeric(gsub(",", "", levels(training_data$Final.Price)))[training_data$Final.Price]
+training_data$Mileage = as.numeric(gsub(",", "", levels(training_data$Mileage)))[training_data$Mileage]
 training_data$Date = as.Date(training_data$Date)
 
-sapply(training_data, function(x) sum(is.na(x))) # check no. of NAs in each predictor
-# Note: final price, price guide, ERP, mileage, flood rating has NAs
+summary(training_data$Auct.Freq)
 
+training_data$Flood.R = as.character(training_data$Flood.R)
+training_data$Flood.R = ifelse(is.na(training_data$Flood.R), 0,
+                               ifelse(training_data$Flood.R == "", 0,
+                                      training_data$Flood.R)
+)
+training_data$Flood.R = as.factor(training_data$Flood.R)
+
+training_data = droplevels(training_data)
+
+summary(training_data)
 str(training_data)
-library("scales")
+
+tail(training_data)
+
+# Filter data
+
+training_data = dplyr::filter(training_data, Auct.Stat == "SOLD")
+
+# sapply(training_data, function(x) sum(is.na(x))) # check no. of NAs in each predictor
+
+training_data = training_data[complete.cases(training_data), ]
+
+# training_data = dplyr::filter(training_data, !is.na(Res.Price) & !is.na(Price.Guide) & 
+#                                !is.na(Age) & !is.na(ERP) & !is.na(Mileage))
+
+training_data$Mileage_yr = training_data$Mileage / training_data$Age
+
+training_data = training_data %>% 
+  mutate(Mileage_yr_Grp = factor(case_when((Mileage_yr <= 30000) ~ "<= 30k/yr",
+                                           (Mileage_yr > 30001 & Mileage_yr < 40000) ~ "30-40k/yr",
+                                           (Mileage_yr > 40000) ~ ">40k/yr",
+                                           TRUE ~ "N/A")
+                                 )
+         )
+
+# # # # # # # # # # # # # # # # # # # # # # # 
+# # # # consider ordered veh condition # # # #
+# # # # # # # # # # # # # # # # # # # # # # # 
+
+# Merge certain conditions in insp. report Phase 3
+training_data$Elect.R = as.character(training_data$Elect.R)
+unique(training_data$Elect.R)
+training_data$Elect.R[training_data$Elect.R %in% c("A", "B")] = "A/B"
+training_data$Elect.R = as.factor(training_data$Elect.R)
+levels(training_data$Elect.R)
+
+training_data$Eng.R = as.character(training_data$Eng.R)
+unique(training_data$Eng.R)
+training_data$Eng.R[training_data$Eng.R %in% c("A", "B")] = "A/B"
+training_data$Eng.R = as.factor(training_data$Eng.R)
+plyr::count(training_data$Eng.R)
+
+training_data$Ext.R = as.character(training_data$Ext.R)
+unique(training_data$Ext.R)
+training_data$Ext.R[training_data$Ext.R %in% c("A", "B")] = "A/B"
+training_data$Ext.R = as.factor(training_data$Ext.R)
+plyr::count(training_data$Ext.R)
+table(train_p2$Ext.R, train_p2$Variant)
+
+training_data$Gearb.R = as.character(training_data$Gearb.R)
+unique(training_data$Gearb.R)
+training_data$Gearb.R[training_data$Gearb.R %in% c("A", "B")] = "A/B"
+training_data$Gearb.R = as.factor(training_data$Gearb.R)
+levels(training_data$Gearb.R)
+
+training_data$Int.R = as.character(training_data$Int.R)
+unique(training_data$Int.R)
+training_data$Int.R[training_data$Int.R %in% c("A", "B")] = "A/B"
+training_data$Int.R = as.factor(training_data$Int.R)
+levels(training_data$Int.R)
+
+training_data$UC.R = as.character(training_data$UC.R)
+unique(training_data$UC.R)
+training_data$UC.R[training_data$UC.R %in% c("A", "B")] = "A/B"
+training_data$UC.R = as.factor(training_data$UC.R)
+levels(training_data$UC.R)
+
+training_data$Struct.R = as.character(training_data$Struct.R)
+unique(training_data$Struct.R)
+training_data$Struct.R[training_data$Struct.R %in% c("A", "B")] = "A/B"
+training_data$Struct.R = as.factor(training_data$Struct.R)
+levels(training_data$Struct.R)
+
+
+
+# # # # # # # # # # # # # # # #
+# # # # #  Scaling TBD # # # # # 
+# # # # # # # # # # # # # # # #
+
+# library("scales")
 
 # scale final price, manf yr, mileage, age
-training_data$Final.Price = rescale(training_data$Final.Price, to=c(0,1))
-training_data$Price.Guide = rescale(training_data$Price.Guide, to=c(0,1))
-training_data$ERP = rescale(training_data$ERP, to=c(0,1))
-training_data$Manf.Yr = rescale(training_data$Manf.Yr, to=c(0,1))
-training_data$Mileage = rescale(training_data$Mileage, to=c(0,1))
-training_data$Age = rescale(training_data$Age, to=c(0,1))
+#training_data$Final.Price = rescale(training_data$Final.Price, to=c(0,1))
+#training_data$Price.Guide = rescale(training_data$Price.Guide, to=c(0,1))
+#training_data$ERP = rescale(training_data$ERP, to=c(0,1))
+#training_data$Manf.Yr = rescale(training_data$Manf.Yr, to=c(0,1))
+#training_data$Mileage = rescale(training_data$Mileage, to=c(0,1))
+#training_data$Age = rescale(training_data$Age, to=c(0,1))
 
+
+# Perodua -----------------------------------------------------------------
+
+train_p2 = dplyr::filter(training_data, Brand == "PERODUA" & !is.na(Variant) &
+                           !(Elect.R %in% c("", "N")) & !(Eng.R %in% c("", "N")) & !(Ext.R %in% c("","N")) & 
+                           !(Gearb.R %in% c("", "N")) & !(Int.R %in% c("", "N")) & !(UC.R %in% c("", "N")) &
+                           !(Struct.R %in% c("", "N"))
+)
+
+train_p2 = droplevels(train_p2)
+
+train_p2 = train_p2 %>% 
+  group_by(Variant) %>%
+  dplyr::filter(n()>10) %>%
+  as.data.frame()
+
+# Drop specific predictors
+drops = c("Brand", "Date", "AuctM", "AuctQ", "Live Auct/X-Chg", "Age", "Mileage", "Mileage_yr", "Auct.Stat", "Veh Loc")
+
+train_p2 = train_p2[, !names(train_p2) %in% drops]
+
+colnames(train_p2)
+str(train_p2)
+
+
+# lm - p2 -----------------------------------------------------------------
+
+# # # # # # # # # # # # # # # 
+# # # # # # Tricky # # # # # # 
+# # # # # # # # # # # # # # # 
+
+# if factor levels dropped before model training, unable to est when factor appear in testing set, 
+# esp. for veh conditions
+to_drop = as.character()
+for (i in 7:(length(colnames(train_p2)))){
+  test = plyr::count(train_p2, colnames(train_p2)[i])
+  if (length(test$freq) == 1){ 
+    # alternative we can add: if length(test$freq) > 1, then test$freq[1]/test$freq[2] < 5% then remove
+    to_drop = c(paste(colnames(train_p2)[i]), to_drop)
+  }
+}
+to_drop
+
+drops = c(to_drop, drops)
+train_p2 = train_p2[, !names(train_p2) %in% drops]
+
+
+CV_values_lm_full = vector(length=1)
+pred_p2 = vector(length=1)
+n=nrow(train_p2)
+for(i in 1){
+  cvi=0
+  for(j in 1:n){
+    # k = ((j-1)*floor(n/5)+1):(j*floor(n/5));
+    set_model = lm(Res.Price ~ . , data = train_p2[-j,]) 
+    yhat = predict(set_model, newdata=train_p2[j,])
+    cvi = cvi + sqrt((yhat - train_p2[j, 1])^2) # Note k in train_p2[j, k] must refer to reserve price
+    pred_p2[j] = yhat
+  }
+  CV_values_lm_full[i] = cvi/ n
+}
+
+test_model_p2 = lm(Res.Price ~., data=train_p2)
+summary(test_model_p2)
+
+# Error message:
+# factor Ext.R has new level E
+# likely due to sparse data in veh conditions
+# predictions not same length with data
+
+CV_values_lm_full
+p2_tbl = cbind("Actual Reserve Price" = train_p2$Res.Price, 
+               "Actual Final Bid Price" = train_p2$Final.Price, 
+               "Est. Reserve Price" = pred_p2)
+
+
+write.csv(p2_tbl, file = "p2.csv")
+
+
+# mboost - p2 -----------------------------------------------------------
+
+library(mboost)
+
+str(train_p2)
+
+boost_control(mstop = 200, # initial number of boosting iterations, default: 100
+              nu = 0.05, # step length, default 0.1
+              trace = TRUE) # default = FALSE
+
+# centering of numerical predictors
+train_p2$FP_ctr = scale(train_p2$Final.Price, center = TRUE)
+train_p2$PG_ctr = scale(train_p2$Price.Guide, center = TRUE)
+train_p2$ERP_ctr = scale(train_p2$ERP, center = TRUE)
+
+drops = c("Brand", "Date", "AuctM", "AuctQ", "Live Auct/X-Chg", "Age", "Mileage", "Mileage_yr", "Auct.Stat", "Veh Loc", 
+          'Final.Price', 'Price.Guide', 'ERP')
+
+train_p2 = train_p2[, !names(train_p2) %in% drops]
+
+
+preds <- names(train_p2[, names(train_p2) != "Res.Price"]) ## names of predictors
+fm <- as.formula(paste("Res.Price ~", paste(preds, collapse = "+"))) ## build formula
+fm
+
+glmboost_p2 = glmboost(fm, data=train_p2)
+
+coef(glmboost_p2, off2int = TRUE) # which = "" show even unselected predictors
+# plot(glmboost_p2, off2int = TRUE)
+plot(glmboost_p2, ylim = range(coef(glmboost_p2)[-1])) # plot without intercept
+
+sum(abs(train_p2$Res.Price - fitted(glmboost_p2)))/length(train_p2$Res.Price)
+sqrt(sum((train_p2$Res.Price - fitted(glmboost_p2))^2)/length(train_p2$Res.Price))
+
+p2_glmboost_tbl = cbind('Actual Res. Price' = train_p2$Res.Price, 
+                        'Est Res. Price - glm' = fitted(glmboost_p2), 
+                        'Actual - Est Res. Price (a)' = train_p2$Res.Price - fitted(glmboost_p2),
+                        'abs(a)' = abs(train_p2$Res.Price - fitted(glmboost_p2)),
+                        'a^2' = ((train_p2$Res.Price - fitted(glmboost_p2))^2)
+                        )
+
+write.csv(p2_glmboost_tbl, file = 'p2_glmboost.csv')
+
+gamboost_p2 = gamboost(fm, data=train_p2)
+
+sum(abs(train_p2$Res.Price - fitted(gamboost_p2)))/length(train_p2$Res.Price)
+sqrt(sum((train_p2$Res.Price - fitted(gamboost_p2))^2)/length(train_p2$Res.Price))
+
+
+p2_gamboost_tbl = cbind('Actual Res. Price' = train_p2$Res.Price, 
+                        'Est Res. Price - gam' = fitted(gamboost_p2), 
+                        'Actual - Est Res. Price (a)' = train_p2$Res.Price - fitted(gamboost_p2),
+                        'abs(a)' = abs(train_p2$Res.Price - fitted(gamboost_p2)),
+                        'a^2' = ((train_p2$Res.Price - fitted(gamboost_p2))^2)
+)
+write.csv(p2_gamboost_tbl, file = 'p2_gamboost.csv')
+
+test = gamboost(Res.Price ~ bols(AuctY) + bols(Model_Grp) + bols(Variant) + bols(Manf.Yr) + 
+                  bols(Elect.R, Eng.R, Ext.R, Gearb.R, Int.R, UC.R, Struct.R, Flood.R) +
+                  bols(Mileage_yr_Grp) + bbs(PG_ctr, by = ERP_ctr) + bbs(FP_ctr) + bbs(ERP_ctr, by = PG_ctr),
+                data = train_p2)
+
+sum(abs(train_p2$Res.Price - fitted(test)))/length(train_p2$Res.Price)
+sqrt(sum((train_p2$Res.Price - fitted(test))^2)/length(train_p2$Res.Price))
+
+
+coef(test)
+extract(bols(train_p2$Manf.Yr))
+length(train_p2$Manf.Yr)
+attributes(train_p2$Manf.Yr)
+length(train_p2$Manf.Yr)
+bols(train_p2$Elect.R, train_p2$Eng.R)
+
+z <- factor(1:3)
+extract(bols(z))
+attributes(z)
+
+
+bbs(train_p2$PG_ctr)
+
+
+
+# h2o - P2 ---------------------------------------------------------------------
+
+df = train_p2
+
+df$AuctY = factor(df$AuctY, ordered = FALSE)
+df$Manf.Yr = factor(df$Manf.Yr, ordered = FALSE)
+df$Mileage_yr_Grp = factor(df$Mileage_yr_Grp, ordered = FALSE)
+
+library(h2o)
+h2o.init(min_mem_size="2g", max_mem_size = "4g")
+h2o.shutdown()
+
+df <- as.h2o(df)
+
+h2o.describe(df)
+
+y <- 'Final.Price'
+# y <- 'Res.Price'
+x <- setdiff(names(df), y)
+
+splits <- h2o.splitFrame(df, ratios = c(0.7, .15) , seed = 1)
+train <- splits[[1]]
+valid <- splits[[2]]
+test <- splits[[3]]
+
+aml_p2 <- h2o.automl(x = x,
+                     y = y,
+                     training_frame = train,
+                     nfolds = 5,
+                     keep_cross_validation_predictions = TRUE,
+                     validation_frame = valid,
+                     leaderboard_frame = test,
+                     # exclude_algos = "GBM", # exclude_algos = c("GLM", "DeepLearning", "GBM", DRF", "StackedEnsemble"),
+                     max_runtime_secs = 60, # max_models
+                     seed = 1
+                     # project_name = "p2_final_price"
+                     )
+
+print(aml_p2@leaderboard)
+
+
+# get the top 6 models from the leaderboard
+for (i in c(1:6)){
+  assign(paste('model', i, sep = "_"), h2o.getModel(aml_p2@leaderboard[i, 1]))
+}
+
+# try ensemble
+
+# issue 1
+
+ensemble1 <- h2o.stackedEnsemble(x = x,
+                                y = y,
+                                training_frame = train,
+                                validation_frame = valid, 
+
+                                # model_id = "my_ensemble_p2",
+                                base_models = list(model_1, model_2), #  model_3, model_4, model_5, model_6),
+                                metalearner_algorithm = "gbm" # metalearner_algorithm = "AUTO" or "glm" or "gbm" or 'drf' or 'deeplearning'
+                                # metalearner_params = list(ntrees = 100, max_depth = 2)
+)
+
+
+# h2o.getFrame(model_3@parameters$training_frame)
+
+# Eval performance on a test set
+perf_leader <- h2o.performance(model_1, newdata = test)
+perf_ensemble <- h2o.performance(ensemble1, newdata = test)
+
+# Compare performance
+mrd_leader <- h2o.mean_residual_deviance(perf_leader)
+mrd_ensemble <- h2o.mean_residual_deviance(perf_ensemble)
+
+mrd_ensemble <= mrd_leader # ensemble performed worst
+
+print(sprintf("Best Base-learner Perf:  %s", mrd_leader))
+print(sprintf("Ensemble Perf:  %s", mrd_ensemble))
+
+# Predictions
+
+pred <- h2o.predict(ensemble1, df)
+p2_h2o_est = as.vector(pred)
+
+# predict reserve price
+p2_h2o_tbl = cbind('Actual Res. Price' = train_p2$Res.Price, 
+                   'Est Res. Price' = p2_h2o_est, 
+                   'Final Bid Price' = train_p2$Final.Price,
+                   'Actual - Est Res. Price (a)' = train_p2$Res.Price - p2_h2o_est,
+                   'abs(a)' = abs(train_p2$Res.Price - p2_h2o_est),
+                   'a^2' = ((train_p2$Res.Price - p2_h2o_est))^2
+                   )
+
+# predict final bid price
+p2_h2o_tbl = cbind('Actual Res. Price' = train_p2$Res.Price, 
+                   'Est Final Price' = p2_h2o_est, 
+                   'Final Bid Price' = train_p2$Final.Price,
+                   'Actual - Final Res. Price (a)' = train_p2$Final.Price - p2_h2o_est,
+                   'abs(a)' = abs(train_p2$Final.Price - p2_h2o_est),
+                   'a^2' = ((train_p2$Final.Price - p2_h2o_est))^2
+)
+
+
+write.csv(p2_h2o_tbl, file = 'p2_h2o.csv')
+
+
+# save the model
+# model_path_1 <- h2o.saveModel(object=aml_p2@leader, path=getwd(), force=TRUE)
+
+# print(model_path_1)
+# "C:\\Users\\70062559\\Documents\\Github Folder\\fpp\\GBM_grid_0_AutoML_20180724_101959_model_0"
+
+# load the model
+# saved_model_1 <- h2o.loadModel(model_path_1)
+# saved_model_1@parameters
+
+h2o.shutdown()
+
+
+# h2o stacked ensemble - p2 -----------------------------------------------
+
+nfolds <- 5
+
+# 1. Generate a 2-model ensemble (GBM + RF)
+
+# Train & Cross-validate a GBM
+my_gbm <- h2o.gbm(x = x,
+                  y = y,
+                  training_frame = train,
+                  distribution = "gaussian",
+                  ntrees = 55,
+                  max_depth = 6,
+                  min_rows = 1,
+                  learn_rate = 0.2,
+                  nfolds = nfolds,
+                  fold_assignment = "Modulo",
+                  keep_cross_validation_predictions = TRUE,
+                  seed = 1)
+
+
+# Train & Cross-validate a RF
+my_rf <- h2o.randomForest(x = x,
+                          y = y,
+                          training_frame = train,
+                          ntrees = 50,
+                          nfolds = nfolds,
+                          fold_assignment = "Modulo",
+                          keep_cross_validation_predictions = TRUE,
+                          seed = 1)
+
+# Train a stacked ensemble using the GBM and RF above
+ensemble <- h2o.stackedEnsemble(x = x,
+                                y = y,
+                                training_frame = train,
+                                model_id = "my_ensemble_binomial",
+                                base_models = list(my_gbm, my_rf)
+                                # metalearner_algorithm = "AUTO" or "glm" or "gbm" or 'drf' or 'deeplearning'
+                                # metalearner_params = list(ntrees = 100, max_depth = 2)
+                                )
+
+# Eval ensemble performance on a test set
+perf <- h2o.performance(ensemble, newdata = test)
+h2o.mean_residual_deviance(perf)
+# Compare to base learner performance on the test set
+perf_gbm_test <- h2o.performance(my_gbm, newdata = test)
+perf_rf_test <- h2o.performance(my_rf, newdata = test)
+
+baselearner_best_mrd_test <- min(h2o.mean_residual_deviance(perf_gbm_test), h2o.mean_residual_deviance(perf_rf_test))
+ensemble_mrd_test <- h2o.mean_residual_deviance(perf)
+
+print(sprintf("Best Base-learner Test AUC:  %s", baselearner_best_auc_test))
+print(sprintf("Ensemble Test AUC:  %s", ensemble_mrd_test)) # ensemble performed worst
+
+# Generate predictions on a test set (if neccessary)
+pred <- h2o.predict(ensemble, newdata = test)
+pred
+
+# 2. Generate a random grid of models and stack them together
+
+# GBM Hyperparamters
+
+# sort by importance
+ntrees_opts = seq(50, 1000, 25) # the more the better
+learn_rate_opts <- seq(0.001, 0.01, 0.001) # the lower the better, but require more trees, 
+# learn_rate_annealing=0.995 (reduction of learning rate with each additional tree)
+max_depth_opts <- seq(1,20) # depths > 10, take longer time to train
+
+sample_rate_opts <- seq(0.3, 1, 0.05) # usually 70-80%
+col_sample_rate_opts <- seq(0.3, 1, 0.05)
+
+# sample_rate_per_class for highly imbalanced classification datasets
+min_rows_opts <- c(1,5,10,20,50,100)
+col_sample_rate_per_tree_opts = seq(0.3, 1, 0.05)
+# nbins_cats_opts = seq(100, 10000, 100) # for categorical predictors
+# nbins for continuous / integer predictors
+
+hyper_params <- list(ntrees = ntrees_opts,
+                     learn_rate = learn_rate_opts,
+                     max_depth = max_depth_opt,
+                     min_rows = min_rows_opts,
+                     sample_rate = sample_rate_opts,
+                     col_sample_rate = col_sample_rate_opts,
+                     col_sample_rate_per_tree = col_sample_rate_opts
+                     # nbins_cats = nbins_cats_opts
+                     )
+
+search_criteria <- list(strategy = "RandomDiscrete",
+                        max_runtime_secs = 600,
+                        max_models = 100,
+                        stopping_metric = "AUTO",
+                        stoppping_tolerance = 0.00001,
+                        stopping_rounds = 5,
+                        seed = 1)
+
+gbm_grid <- h2o.grid(algorithm = "gbm",
+                     grid_id = "gbm_grid_binomial",
+                     x = x,
+                     y = y,
+                     training_frame = train,
+                     nfolds = nfolds,
+                     validation_frame = test, # nfolds = 0
+                     
+                     # Gaussian is best for MSE loss, but can try 
+                     # other distributions ("laplace", "quantile"):
+                     # distribution="gaussian",
+                     
+                     # stop as soon as mse doesn't improve by 
+                     # more than 0.1% on the validation set, 
+                     # for 2 consecutive scoring events:
+                     stopping_rounds = 2,
+                     stopping_tolerance = 1e-3,
+                     stopping_metric = "MSE",
+                     
+                     # how often to score (affects early stopping):
+                     score_tree_interval = 100,
+                     
+                     fold_assignment = "Modulo",
+                     keep_cross_validation_predictions = TRUE,
+                     hyper_params = hyper_params,
+                     search_criteria = search_criteria)
+
+gbm_sorted_grid <- h2o.getGrid(grid_id = "gbm_grid_binomial", sort_by = "mse")
+print(gbm_sorted_grid)
+
+best_model <- h2o.getModel(gbm_sorted_grid@model_ids[[1]])
+summary(best_model)
+
+# Train a stacked ensemble using the GBM grid
+ensemble <- h2o.stackedEnsemble(x = x,
+                                y = y,
+                                training_frame = train,
+                                model_id = "ensemble_gbm_grid_binomial",
+                                base_models = gbm_grid@model_ids)
+
+
+# Eval ensemble performance on a test set
+perf <- h2o.performance(ensemble, newdata = test)
+
+# Compare to base learner performance on the test set
+.getmrd <- function(mm) h2o.mean_residual_deviance(h2o.performance(h2o.getModel(mm), newdata = test))
+baselearner_mrds <- sapply(gbm_grid@model_ids, .getmrd)
+
+baselearner_best_mrd_test <- max(baselearner_mrds)
+ensemble_mrd_test <- h2o.mean_residual_deviance(perf)
+
+print(sprintf("Best Base-learner Test AUC:  %s", baselearner_best_mrd_test))
+print(sprintf("Ensemble Test AUC:  %s", ensemble_mrd_test))
+
+# Generate predictions on a test set (if neccessary)
+pred <- h2o.predict(ensemble, newdata = df) # still poorer than AutoML GBM best model
+
+p2_est_gbmgs = as.vector(pred)
+
+p2_tbl_gbmgs = cbind('Actual Res. Price' = train_p2$Res.Price, 
+                   'Est Res. Price - gam' = p2_est_gbmgs, 
+                   'Final Bid Price' = train_p2$Final.Price,
+                   'Actual - Est Res. Price (a)' = train_p2$Res.Price - p2_est_gbmgs,
+                   'abs(a)' = abs(train_p2$Res.Price - p2_est_gbmgs),
+                   'a^2' = ((train_p2$Res.Price - p2_est_gbmgs))^2
+)
+
+write.csv(p2_tbl_gbmgs, file = 'p2_gbmgs.csv')
+
+# 3. Train several grids of models
 
 
 
