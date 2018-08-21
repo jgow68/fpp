@@ -8,16 +8,16 @@
 
 # data = read.csv("ConsolAD_Apr18.csv")
 # data = read.csv("ConsolAD_Jun18.csv")
-data = read.csv('ConsolAD_Jul18.csv')
-verify_data = read.csv("actRP_21Aug18.csv")
+data = read.csv('ConsolAD_Jul18utf.csv', encoding = 'UTF-8')
+verify_data = read.csv("actRP_24Aug18.csv")
 
 # Extract and form df -----------------------------------------------------
 
 str(data)
 str(verify_data)
-
+head(data)
 training_data = cbind.data.frame(data$Reserve.Price, data$Final.bid.price,
-                                 data$Auction.Date, data$Auction.Year, 
+                                 data$X.U.FEFF.Auction.Date, data$Auction.Year, # note utf-8 start format changed for Auction Date
                                  data$Auction.Month, data$Auction.Quarter,
                                  data$Brand, data$Model.Group,
                                  data$Live.Auction...X.Change,
@@ -55,10 +55,10 @@ names(training_data) = c("Res.Price", "Final.Price",
                          'Gear_rmk', 'Int_rmk', 'UC_rmk'
 )
 
-test_data = cbind.data.frame(verify_data$Proposed.Reserve.Price..RM., verify_data$Reg..No., as.factor(format(Sys.Date(), "%Y")),
+test_data = cbind.data.frame(verify_data$Proposed.Reserve.Price, verify_data$Reg..No., as.factor(format(Sys.Date(), "%Y")),
                              verify_data$Make, verify_data$Model,
                              verify_data$Variants.Standardization,
-                             verify_data$Price.Guide..RM., verify_data$Approved.Final.ERP,
+                             verify_data$Price.Guide, verify_data$Approved.Final.ERP,
                              verify_data$No..of.times.in.auction,
                              verify_data$Year.Make, verify_data$Mileage,
                              verify_data$Electrical, verify_data$Engine, verify_data$Ext.Grade,
@@ -87,6 +87,7 @@ training_data$AuctM = factor(training_data$AuctM, ordered = TRUE,
 training_data$AuctQ = factor(training_data$AuctQ, ordered = TRUE, levels=c("Q1", "Q2", "Q3", "Q4"))
 
 training_data$Manf.Yr = as.numeric(levels(training_data$Manf.Yr))[training_data$Manf.Yr]
+training_data$Age = as.numeric(levels(training_data$Age))[training_data$Age]
 training_data = dplyr::filter(training_data, (Manf.Yr >= 2000) & !is.na(Manf.Yr))
 training_data$Manf.Yr = factor(training_data$Manf.Yr, ordered = TRUE, 
                             levels=c(2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
@@ -115,7 +116,7 @@ training_data$Date = as.Date(training_data$Date)
 # test_data$Mileage = as.numeric(gsub(",", "", levels(test_data$Mileage)))[test_data$Mileage]
 
 # test_data$Price.Guide = as.numeric(gsub(",", "", levels(test_data$Price.Guide)))[test_data$Price.Guide]
-test_data$ERP = as.numeric(gsub(",", "", levels(test_data$ERP)))[test_data$ERP]
+# test_data$ERP = as.numeric(gsub(",", "", levels(test_data$ERP)))[test_data$ERP]
 
 training_data$Flood.R = as.character(training_data$Flood.R)
 training_data$Flood.R = ifelse(is.na(training_data$Flood.R), 0,
@@ -140,92 +141,6 @@ training_data$Int_rmk = as.character(training_data$Int_rmk)
 training_data$UC_rmk = as.character(training_data$UC_rmk)
 
 
-# clean text remarks, e.g. do for electrical remarks only
-library(stringr)
-
-training_data$Elec_len = str_length(training_data$Elec_rmk)
-training_data$Elec_len[training_data$Elec_len == 2] = -1
-training_data['ElecUP'] = sapply(gregexpr("[A-Z]", training_data$Elec_rmk), length)
-training_data$ElecUP[training_data$Elec_rmk == -1] = -1
-training_data['ElecNC'] = sapply(gregexpr("[0-9]", training_data$Elec_rmk), length)
-training_data$ElecNC[training_data$Elec_rmk == -1] = -1
-training_data['ElecUD'] = (training_data$ElecUP/training_data$Elec_len)
-training_data['ElecND'] = (training_data$ElecNC/training_data$Elec_len)
-
-library(tm)
-corpus = Corpus(VectorSource(training_data$Elec_rmk))
-corpus = tm_map(corpus, tolower) # lower case
-corpus = tm_map(corpus, removePunctuation) # remove punctuation
-corpus = tm_map(corpus, removeWords, stopwords("english")) # remove common words
-dataframe <- data.frame(text=sapply(corpus, identity),stringsAsFactors=F)
-training_data$Elec_rmk = dataframe$text
-
-training_data['Elec_rmk'] = ifelse(training_data$Elec_len == 0,-1,training_data$Elec_rmk) # separate those with descriptions and w/o  
-training_data['descWC'] = sapply(gregexpr("\\W+", training_data$Elec_rmk), length) + 1
-training_data$descWC[training_data$Elec_rmk == -1] = -1
-training_data['descWD1'] = (training_data$Elec_len/training_data$descWC)
-training_data$descWD1[training_data$Elec_rmk == -1] = -1
-training_data['descWD2'] = tan(training_data$descWD1)
-training_data$descWD2[training_data$Elec_rmk == -1] = -1
-
-# split data into 2 (below / above median price)
-# train1 = subset(train, price <= 2.833)
-# train2 = subset(train, price > 2.833)
-
-
-library(quanteda)
-corpus1 = corpus(as.character(training_data$Elec_rmk))
-summary(corpus1)
-dfm1 <- dfm(
-  corpus1, 
-  ngrams = 1, 
-  remove = c("rm", stopwords("english")),
-  remove_punct = TRUE,
-  remove_numbers = TRUE,
-  stem = TRUE)
-tf1 <- topfeatures(dfm1, n = 100)
-quanteda::print(dfm1)
-
-#corpus2 = corpus(as.character(train2$item_description))
-#summary(corpus2)
-#dfm2 <- dfm(
-#  corpus2, 
-#  ngrams = 1, 
-#  remove = c("rm", stopwords("english")),
-#  remove_punct = TRUE,
-#  remove_numbers = TRUE,
-#  stem = TRUE)
-#tf2 <- topfeatures(dfm2, n = 100)
-
-termFrame = data.frame(term = names(tf1), freq = unname(tf1))
-#termFrame1 = data.frame(term = names(tf2), freq = unname(tf2))
-#termFrame = termFrame %>%
-#  left_join(termFrame1, by = 'term')
-#termFrame$ratio = termFrame$freq.x/(termFrame$freq.x+termFrame$freq.y)
-termFrame$ratio = termFrame$freq/sum(termFrame$freq)
-summary(termFrame$ratio)
-
-termFrame1 = subset(termFrame, ratio > 0.03)
-options(repr.plot.width=8, repr.plot.height=5)
-
-library(ggplot2)
-ggplot(termFrame1, aes(x=reorder(term,ratio), y=ratio))+
-  geom_bar(stat='identity')+
-  scale_y_continuous(limits=c(0, 0.5))+
-  ggtitle('Term Frequency Ratio - Above Median Pricing - item_description')+
-  geom_abline(intercept = 0.25, slope = 0,color="red")+
-  xlab('Term')
-
-#termFrame2 = subset(termFrame, ratio > 0.53)
-#ggplot(termFrame2, aes(x=reorder(term,-ratio), y=ratio))+
-#  geom_bar(stat='identity')+
-#  scale_y_continuous(limits=c(0,1))+
-#  ggtitle('Term Frequency Ratio - Below Median Pricing - item_description')+
-#  geom_abline(intercept = 0.5, slope = 0,color="red")+
-#  xlab('Term')
-
-
-
 training_data = droplevels(training_data)
 test_data = droplevels(test_data)
 
@@ -240,6 +155,7 @@ str(test_data)
 training_data = dplyr::filter(training_data, Auct.Stat == "SOLD")
 
 # sapply(training_data, function(x) sum(is.na(x))) # check no. of NAs in each predictor
+sapply(test_data, function(x) sum(is.na(x))) # check no. of NAs in each predictor
 
 training_data = training_data[complete.cases(training_data), ]
 test_data = test_data[complete.cases(test_data[, -1]), ]
@@ -251,27 +167,27 @@ test_data = test_data[complete.cases(test_data[, -1]), ]
 training_data$Mileage_yr = training_data$Mileage / training_data$Age
 
 training_data = training_data %>% 
-  mutate(Mileage_yr_Grp = factor(case_when((Mileage_yr <= 30000) ~ "<= 30k/yr",
+  dplyr::mutate(Mileage_yr_Grp = factor(dplyr::case_when((Mileage_yr <= 30000) ~ "<= 30k/yr",
                                            (Mileage_yr > 30001 & Mileage_yr < 40000) ~ "30-40k/yr",
                                            (Mileage_yr > 40000) ~ ">40k/yr",
                                            TRUE ~ "N/A")
-                                 )
-         )
+  )
+  )
 
 
 test_data$Age = as.integer(format(Sys.Date(), "%Y")) - test_data$Manf.Yr
 test_data$Mileage_yr = test_data$Mileage / test_data$Age
 
 test_data = test_data %>% 
-  mutate(Mileage_yr_Grp = factor(case_when((Mileage_yr <= 30000) ~ "<= 30k/yr",
+  dplyr::mutate(Mileage_yr_Grp = factor(dplyr::case_when((Mileage_yr <= 30000) ~ "<= 30k/yr",
                                            (Mileage_yr > 30001 & Mileage_yr < 40000) ~ "30-40k/yr",
                                            (Mileage_yr > 40000) ~ ">40k/yr",
                                            TRUE ~ "N/A")
-                                 )
-         )
+  )
+  )
 
-dim(train_pop)
-dim(test_pop)
+dim(training_data)
+dim(test_data)
 
 
 # # # # # # # # # # # # # # # # # # # # # # # 
@@ -372,8 +288,8 @@ test_data$Struct.R[test_data$Struct.R %in% c("A", "B")] = "A/B"
 test_data$Struct.R = as.factor(test_data$Struct.R)
 levels(test_data$Struct.R)
 
-dim(train_pop)
-dim(test_pop)
+dim(training_data)
+dim(test_data)
 
 # # # # # # # # # # # # # # # #
 # # # # #  Scaling TBD # # # # # 
@@ -388,6 +304,136 @@ dim(test_pop)
 #training_data$Manf.Yr = rescale(training_data$Manf.Yr, to=c(0,1))
 #training_data$Mileage = rescale(training_data$Mileage, to=c(0,1))
 #training_data$Age = rescale(training_data$Age, to=c(0,1))
+
+# Text: Features Selection ------------------------------------------------
+
+# clean text remarks, e.g. do for electrical remarks only
+library(stringr)
+
+training_data$Elec_len = str_length(training_data$Elec_rmk)
+training_data$Elec_len[training_data$Elec_len == 2] = -1
+training_data['ElecUP'] = sapply(gregexpr("[A-Z]", training_data$Elec_rmk), length)
+training_data$ElecUP[training_data$Elec_rmk == -1] = -1
+training_data['ElecNC'] = sapply(gregexpr("[0-9]", training_data$Elec_rmk), length)
+training_data$ElecNC[training_data$Elec_rmk == -1] = -1
+training_data['ElecUD'] = (training_data$ElecUP/training_data$Elec_len)
+training_data['ElecND'] = (training_data$ElecNC/training_data$Elec_len)
+
+library(tm)
+corpus = VCorpus(VectorSource(training_data$Elec_rmk)) # corpus = Corpus(VectorSource(training_data$Elec_rmk))
+#inspect(corpus)
+
+corpus = tm_map(corpus, stripWhitespace) # remove extra whitespace
+corpus = tm_map(corpus, content_transformer(tolower))
+corpus = tm_map(corpus, removePunctuation) # remove punctuation
+corpus = tm_map(corpus, removeWords, stopwords('en'))
+# corpus = tm_map(corpus, stemDocument) # stemming, i.e. is, are, was, were -> be
+
+dtm = DocumentTermMatrix(corpus 
+                         # control = list(weighting = function(x) weightTfIdf(x, normalize = FALSE)) # default is weightTf
+)
+
+inspect(dtm)
+
+findFreqTerms(dtm, 50) # find terms that occur at least n times
+findAssocs(dtm, 'window', 0.5) # find terms that correlate with 0.x correlation
+
+removeSparseTerms(dtm, sparse = 0.999) # our current sparsity is very high
+
+library(NLP)
+BigramTokenizer <- function(x) unlist(lapply(ngrams(words(x), 2), paste, collapse = " "), use.names = FALSE)
+tdm <- TermDocumentMatrix(corpus, control = list(tokenize = BigramTokenizer))
+
+inspect(removeSparseTerms(tdm, 0.9999))
+findFreqTerms(tdm, 25)
+
+#dataframe <- data.frame(text=sapply(corpus, identity),stringsAsFactors=F)
+#training_data$Elec_rmk = dataframe$text
+
+training_data['Elec_rmk'] = ifelse(training_data$Elec_len == 0,-1,training_data$Elec_rmk) # separate those with descriptions and w/o  
+training_data['descWC'] = sapply(gregexpr("\\W+", training_data$Elec_rmk), length) + 1
+training_data$descWC[training_data$Elec_rmk == -1] = -1
+training_data['descWD1'] = (training_data$Elec_len/training_data$descWC)
+training_data$descWD1[training_data$Elec_rmk == -1] = -1
+training_data['descWD2'] = tan(training_data$descWD1)
+training_data$descWD2[training_data$Elec_rmk == -1] = -1
+
+# split data into 2 (below / above median price)
+# train1 = subset(train, price <= 2.833)
+# train2 = subset(train, price > 2.833)
+
+library(quanteda)
+corpus_elec = corpus(as.character(training_data$Elec_rmk)) # creates corpus
+#summary(corpus1)
+kwic(corpus1, 'faulty')
+
+dfm_elec <- dfm( # creates document feature matrix
+  corpus_elec, 
+  ngrams = 1,
+  remove = stopwords("english"), remove_punct = TRUE, remove_numbers = TRUE,
+  stem = FALSE)
+tf_elec <- topfeatures(dfm_elec, n = 10, decreasing=TRUE)
+
+
+# one-hot encoding into variables?
+keywords = c('faulty', 'malfunct')
+training_data['faulty_malfunct'] = (str_detect(training_data$Elec_rmk, paste(keywords, collapse = '|')))*1 # str_detect is partial match
+
+# Issue: 
+# 6 columns of remarks, consider merging some?
+# sparse matrices due to one-hot encoding and text categorization
+# h2o.ai: skip tree-based algo, i.e. GBM, RF
+# sparse multi-layer perceptron (MLP)
+
+# Wordcloud Plot ----------------------------------------------------------
+
+# quanteda plot
+set.seed(100)
+textplot_wordcloud(dfm_elec, min_count = 50, random_order = FALSE,
+                   rotation = .25, min_size = 0.5, max_size = 5, 
+                   color = RColorBrewer::brewer.pal(8,"Dark2")
+)
+
+#df_wc = quanteda::convert(dfm1, to = 'matrix')
+#df_wc_cs = colSums(df_wc)
+#ap.d <- data.frame(word = names(df_wc_cs), freq = df_wc_cs)
+#table(ap.d$freq)
+
+#library(wordcloud)
+#pal2 <- brewer.pal(8,"Dark2")
+# png("test1.png", width=480, height=480, units = 'px')
+#wordcloud(words = ap.d$word, freq = ap.d$freq, scale=c(3, .2),min.freq = 50,
+#          max.words=200, random.order=FALSE, rot.per=.15, colors=pal2
+#)
+# dev.off() # to reset graphics device and output graphs
+
+
+termFrame = data.frame(term = names(tf1), freq = unname(tf1))
+#termFrame1 = data.frame(term = names(tf2), freq = unname(tf2))
+#termFrame = termFrame %>%
+#  left_join(termFrame1, by = 'term')
+#termFrame$ratio = termFrame$freq.x/(termFrame$freq.x+termFrame$freq.y)
+termFrame$ratio = termFrame$freq/sum(termFrame$freq)
+summary(termFrame$ratio)
+
+termFrame1 = subset(termFrame, ratio > 0.03)
+options(repr.plot.width=8, repr.plot.height=5)
+
+library(ggplot2)
+ggplot(termFrame1, aes(x=reorder(term,ratio), y=ratio))+
+  geom_bar(stat='identity')+
+  scale_y_continuous(limits=c(0, 0.5))+
+  ggtitle('Term Frequency Ratio - Above Median Pricing - item_description')+
+  geom_abline(intercept = 0.25, slope = 0,color="red")+
+  xlab('Term')
+
+#termFrame2 = subset(termFrame, ratio > 0.53)
+#ggplot(termFrame2, aes(x=reorder(term,-ratio), y=ratio))+
+#  geom_bar(stat='identity')+
+#  scale_y_continuous(limits=c(0,1))+
+#  ggtitle('Term Frequency Ratio - Below Median Pricing - item_description')+
+#  geom_abline(intercept = 0.5, slope = 0,color="red")+
+#  xlab('Term')
 
 
 # Japan Top 3 & 2 National Make -------------------------------------------
@@ -408,7 +454,7 @@ test_pop = dplyr::filter(test_data, Brand %in% c("PERODUA",'PROTON', 'NISSAN', '
 
 
 train_pop = train_pop %>% 
-  group_by(Variant) %>%
+  dplyr::group_by(Variant) %>%
   dplyr::filter(n()>10) %>%
   as.data.frame()
 
@@ -481,6 +527,17 @@ h2o.rmse(aml_pop@leader) # 965
 
 pred_automl <- h2o.predict(aml_pop, df_h2o_test)
 pop_h2o_est = as.vector(pred_automl)
+
+# output in table format
+pop_tbl = cbind.data.frame(
+  'Model' = as.character(test_pop$Model_Grp),
+  'Variant' = as.character(test_pop$Variant),
+  'Reg. No.' = as.character(test_pop$Reg.No.),
+  'Actual Res. Price' = test_pop$Res.Price, 
+  'Est Final Price' = pop_h2o_est
+)
+
+write.csv(pop_tbl, file = 'pop.csv')
 
 
 # h2o GBM grid search -----------------------------------------------------
@@ -561,11 +618,6 @@ pop_tbl_gbm = cbind.data.frame(
   'Actual Res. Price' = test_pop$Res.Price, 
   'Est Final Price' = pred_gbm
 )
-
-#'Final Bid Price' = train_pop$Final.Price,
-#'Actual - Final Res. Price (a)' = train_pop$Final.Price - pop_h2o_est,
-#'abs(a)' = abs(train_pop$Final.Price - pop_h2o_est),
-#'a^2' = ((train_pop$Final.Price - pop_h2o_est))^2)
 
 write.csv(pop_tbl_gbm, file = 'pop_gbm.csv')
 
