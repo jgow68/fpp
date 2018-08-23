@@ -8,7 +8,7 @@
 
 # data = read.csv("ConsolAD_Apr18.csv")
 # data = read.csv("ConsolAD_Jun18.csv")
-data = read.csv('ConsolAD_Jul18utf.csv', encoding = 'UTF-8')
+data = read.csv('ConsolAD_Jul18.csv', encoding = 'UTF-8')
 verify_data = read.csv("actRP_24Aug18.csv")
 
 # Extract and form df -----------------------------------------------------
@@ -16,68 +16,71 @@ verify_data = read.csv("actRP_24Aug18.csv")
 str(data)
 str(verify_data)
 head(data)
-training_data = cbind.data.frame(data$Reserve.Price, data$Final.bid.price,
-                                 data$X.U.FEFF.Auction.Date, data$Auction.Year, # note utf-8 start format changed for Auction Date
-                                 data$Auction.Month, data$Auction.Quarter,
-                                 data$Brand, data$Model.Group,
-                                 data$Live.Auction...X.Change,
-                                 data$Adj..Var., # adj. in Excel
-                                 data$Adj..PG, data$Adj..ERP, # need to import from PG
-                                 data$Auct.Freq, # adj. in Excel
-                                 data$Manufacturing.Year, data$Mileage, data$Vehicle.Age,
-                                 data$Auction.Status, data$Vehicle.Location,
-                                 # data$MUV.Grade, # first grading scheme
-                                 # data$VAS.Exterior.Grade, data$VAS.Interior.Grade, # second grading scheme
-                                 # third grading scheme
-                                 data$MOS.Electrical.Rating, data$MOS.Engine.Rating, data$MOS.Exterior.Rating,
-                                 data$MOS.Gearbox.Rating, data$MOS.Interior.Rating, data$MOS.Undercarriage.Rating,
-                                 data$MOS.Structure.Rating, data$MOS.Flood.Rating,
-                                 data$Electrical_Rmks, data$Engine_Rmks, data$Exterior_Rmks,
-                                 data$Gearbox_Rmks, data$Interior_Rmks, data$UC_Rmks
-                                 )
-
-names(training_data) = c("Res.Price", "Final.Price",
-                         "Date", "AuctY",
-                         "AuctM", "AuctQ",
-                         "Brand", "Model_Grp", 
-                         "Live Auct/X-Chg",
-                         "Variant",
-                         "Price.Guide", "ERP",
-                         'Auct.Freq',
-                         "Manf.Yr", "Mileage", "Age",
-                         "Auct.Stat", "Veh Loc",
-                         # "Grade",
-                         # "Ext", "Int",
-                         "Elect.R", "Eng.R", "Ext.R",
-                         "Gearb.R", "Int.R", "UC.R",
-                         "Struct.R", "Flood.R",
-                         'Elec_rmk', 'Eng_rmk', 'Ext_rmk',
-                         'Gear_rmk', 'Int_rmk', 'UC_rmk'
+training_data = cbind.data.frame(
+  data$Reserve.Price, data$Final.bid.price,
+  data$Auction.Date, data$Auction.Year, # note utf-8 start format changed for Auction Date
+  data$Auction.Month, data$Auction.Quarter,
+  data$Brand, data$Model.Group,
+  data$Live.Auction...X.Change,
+  data$Adj..Var., # adj. in Excel
+  data$Adj..PG, data$Adj..ERP, # need to import from PG
+  data$Auct.Freq, # adj. in Excel
+  data$Manufacturing.Year, data$Mileage, data$Vehicle.Age,
+  data$Auction.Status, data$Vehicle.Location,
+  # data$MUV.Grade, # first grading scheme
+  # data$VAS.Exterior.Grade, data$VAS.Interior.Grade, # second grading scheme
+  # third grading scheme
+  data$MOS.Electrical.Rating, data$MOS.Engine.Rating, data$MOS.Exterior.Rating,
+  data$MOS.Gearbox.Rating, data$MOS.Interior.Rating, data$MOS.Undercarriage.Rating,
+  data$MOS.Structure.Rating, data$MOS.Flood.Rating,
+  data$Electrical_Rmks, data$Engine_Rmks, data$Exterior_Rmks,
+  data$Gearbox_Rmks, data$Interior_Rmks, data$UC_Rmks, data$VehHist_Rmks
 )
 
-test_data = cbind.data.frame(verify_data$Proposed.Reserve.Price, verify_data$Reg..No., as.factor(format(Sys.Date(), "%Y")),
-                             verify_data$Make, verify_data$Model,
-                             verify_data$Variants.Standardization,
-                             verify_data$Price.Guide, verify_data$Approved.Final.ERP,
-                             verify_data$No..of.times.in.auction,
-                             verify_data$Year.Make, verify_data$Mileage,
-                             verify_data$Electrical, verify_data$Engine, verify_data$Ext.Grade,
-                             verify_data$Gearbox, verify_data$Interior, verify_data$Undercarriage,
-                             verify_data$Structure, verify_data$Flooded.Rating
+names(training_data) = c(
+  "Res.Price", "Final.Price",
+  "Date", "AuctY",
+  "AuctM", "AuctQ",
+  "Brand", "Model_Grp", 
+  "Live Auct/X-Chg",
+  "Variant",
+  "Price.Guide", "ERP",
+  'Auct.Freq',
+  "Manf.Yr", "Mileage", "Age",
+  "Auct.Stat", "Veh Loc",
+  # "Grade",
+  # "Ext", "Int",
+  "Elect.R", "Eng.R", "Ext.R",
+  "Gearb.R", "Int.R", "UC.R",
+  "Struct.R", "Flood.R",
+  'Elec_rmk', 'Eng_rmk', 'Ext_rmk',
+  'Gear_rmk', 'Int_rmk', 'UC_rmk', 'VH_rmk'
 )
 
-names(test_data) = c("Res.Price", "Reg.No.", 'AuctY',
-                     "Brand", "Model_Grp", 
-                     "Variant", 
-                     "Price.Guide", "ERP",
-                     'Auct.Freq', 
-                     "Manf.Yr", "Mileage",
-                     "Elect.R", "Eng.R", "Ext.R",
-                     "Gearb.R", "Int.R", "UC.R",
-                     "Struct.R", "Flood.R"
+test_data = cbind.data.frame(
+  verify_data$Proposed.Reserve.Price, verify_data$Reg..No., as.factor(format(Sys.Date(), "%Y")),
+  verify_data$Make, verify_data$Model,
+  verify_data$Variants.Standardization,
+  verify_data$Price.Guide, verify_data$Approved.Final.ERP,
+  verify_data$No..of.times.in.auction,
+  verify_data$Year.Make, verify_data$Mileage,
+  verify_data$Electrical, verify_data$Engine, verify_data$Ext.Grade,
+  verify_data$Gearbox, verify_data$Interior, verify_data$Undercarriage,
+  verify_data$Structure, verify_data$Flooded.Rating
 )
 
-str(test_data)
+names(test_data) = c(
+  "Res.Price", "Reg.No.", 'AuctY',
+  "Brand", "Model_Grp", 
+  "Variant", 
+  "Price.Guide", "ERP",
+  'Auct.Freq', 
+  "Manf.Yr", "Mileage",
+  "Elect.R", "Eng.R", "Ext.R",
+  "Gearb.R", "Int.R", "UC.R",
+  "Struct.R", "Flood.R"
+)
+
 
 training_data$AuctY = factor(training_data$AuctY, ordered = TRUE, levels=c(2013, 2014, 2015, 2016, 2017, 2018))
 
@@ -97,7 +100,13 @@ training_data$Manf.Yr = factor(training_data$Manf.Yr, ordered = TRUE,
 test_data = dplyr::filter(test_data, (Manf.Yr >= 2000) & !is.na(Manf.Yr))
 
 # Convert to factor / numericals depending on data structure
-# Likely to cause errors here!!
+
+# # # # # # # # # # # # # # # # # # 
+#
+# Errors likely to occur here!!
+#
+# # # # # # # # # # # # # # # # # # 
+
 training_data$Brand = as.factor(toupper(trimws(training_data$Brand)))
 training_data$Model_Grp = as.factor(toupper(trimws(training_data$Model_Grp)))
 training_data$Variant = as.factor(toupper(trimws(training_data$Variant)))
@@ -107,17 +116,47 @@ test_data$Brand = as.factor(toupper(trimws(test_data$Brand)))
 test_data$Model_Grp = as.factor(toupper(trimws(test_data$Model_Grp)))
 test_data$Variant = as.factor(toupper(trimws(test_data$Variant)))
 
-training_data$Res.Price = as.numeric(gsub(",", "", levels(training_data$Res.Price)))[training_data$Res.Price]
-training_data$Final.Price = as.numeric(gsub(",", "", levels(training_data$Final.Price)))[training_data$Final.Price]
-training_data$Mileage = as.numeric(gsub(",", "", levels(training_data$Mileage)))[training_data$Mileage]
-training_data$Date = as.Date(training_data$Date)
+if(class(training_data$Res.Price) == 'factor'){ 
+  training_data$Res.Price = as.numeric(gsub(",", "", levels(training_data$Res.Price)))[training_data$Res.Price]
+} else{
+  training_data$Res.Price
+}
 
-# test_data$Res.Price = as.numeric(gsub(",", "", levels(test_data$Res.Price)))[test_data$Res.Price]
-# test_data$Mileage = as.numeric(gsub(",", "", levels(test_data$Mileage)))[test_data$Mileage]
+if(class(training_data$Final.Price) == 'factor'){ 
+  training_data$Final.Price = as.numeric(gsub(",", "", levels(training_data$Final.Price)))[training_data$Final.Price]
+} else{
+  training_data$Final.Price
+}
 
-# test_data$Price.Guide = as.numeric(gsub(",", "", levels(test_data$Price.Guide)))[test_data$Price.Guide]
-# test_data$ERP = as.numeric(gsub(",", "", levels(test_data$ERP)))[test_data$ERP]
+if(class(training_data$Mileage) == 'factor'){ 
+  training_data$Mileage = as.numeric(gsub(",", "", levels(training_data$Mileage)))[training_data$Mileage]
+} else{
+  training_data$Mileage
+}
 
+# Test data: convert factors to numerics
+if(class(test_data$Res.Price) == 'factor'){ 
+  test_data$Res.Price = as.numeric(gsub(",", "", levels(test_data$Res.Price)))[test_data$Res.Price]
+} else{
+  test_data$Res.Price
+}
+if(class(test_data$Mileage) == 'factor'){ 
+  test_data$Mileage = as.numeric(gsub(",", "", levels(test_data$Mileage)))[test_data$Mileage]
+} else{
+  test_data$Mileage
+}
+if(class(test_data$Price.Guide) == 'factor'){ 
+  test_data$Price.Guide = as.numeric(gsub(",", "", levels(test_data$Price.Guide)))[test_data$Price.Guide]
+} else{
+  test_data$Price.Guide
+}
+if(class(test_data$ERP) == 'factor'){ 
+  test_data$ERP = as.numeric(gsub(",", "", levels(test_data$ERP)))[test_data$ERP]
+} else{
+  test_data$ERP
+}
+
+# Clean Flood Rating: alot of NAs and 0
 training_data$Flood.R = as.character(training_data$Flood.R)
 training_data$Flood.R = ifelse(is.na(training_data$Flood.R), 0,
                                ifelse(training_data$Flood.R == "", 0,
@@ -139,16 +178,13 @@ training_data$Ext_rmk = as.character(training_data$Ext_rmk)
 training_data$Gear_rmk = as.character(training_data$Gear_rmk)
 training_data$Int_rmk = as.character(training_data$Int_rmk)
 training_data$UC_rmk = as.character(training_data$UC_rmk)
-
+training_data$VH_rmk = as.character(training_data$VH_rmk)
 
 training_data = droplevels(training_data)
 test_data = droplevels(test_data)
 
-summary(training_data)
-summary(test_data)
-
-str(training_data)
-str(test_data)
+dim(training_data)
+dim(test_data)
 
 # Filter data
 
@@ -160,35 +196,38 @@ sapply(test_data, function(x) sum(is.na(x))) # check no. of NAs in each predicto
 training_data = training_data[complete.cases(training_data), ]
 test_data = test_data[complete.cases(test_data[, -1]), ]
 
-
 # training_data = dplyr::filter(training_data, !is.na(Res.Price) & !is.na(Price.Guide) & 
 #                                !is.na(Age) & !is.na(ERP) & !is.na(Mileage))
 
 training_data$Mileage_yr = training_data$Mileage / training_data$Age
 
 training_data = training_data %>% 
-  dplyr::mutate(Mileage_yr_Grp = factor(dplyr::case_when((Mileage_yr <= 30000) ~ "<= 30k/yr",
-                                           (Mileage_yr > 30001 & Mileage_yr < 40000) ~ "30-40k/yr",
-                                           (Mileage_yr > 40000) ~ ">40k/yr",
-                                           TRUE ~ "N/A")
+  dplyr::mutate(Mileage_yr_Grp = factor(
+    dplyr::case_when(
+      (Mileage_yr <= 30000) ~ "<= 30k/yr",
+      (Mileage_yr > 30001 & Mileage_yr < 40000) ~ "30-40k/yr",
+      (Mileage_yr > 40000) ~ ">40k/yr", 
+      TRUE ~ "N/A"
+    )
   )
-  )
-
+)
 
 test_data$Age = as.integer(format(Sys.Date(), "%Y")) - test_data$Manf.Yr
 test_data$Mileage_yr = test_data$Mileage / test_data$Age
 
 test_data = test_data %>% 
-  dplyr::mutate(Mileage_yr_Grp = factor(dplyr::case_when((Mileage_yr <= 30000) ~ "<= 30k/yr",
-                                           (Mileage_yr > 30001 & Mileage_yr < 40000) ~ "30-40k/yr",
-                                           (Mileage_yr > 40000) ~ ">40k/yr",
-                                           TRUE ~ "N/A")
+  dplyr::mutate(Mileage_yr_Grp = factor(
+    dplyr::case_when(
+      (Mileage_yr <= 30000) ~ "<= 30k/yr",
+      (Mileage_yr > 30001 & Mileage_yr < 40000) ~ "30-40k/yr",
+      (Mileage_yr > 40000) ~ ">40k/yr",
+      TRUE ~ "N/A"
+    )
   )
-  )
+)
 
 dim(training_data)
 dim(test_data)
-
 
 # # # # # # # # # # # # # # # # # # # # # # # 
 # # # # consider ordered veh condition # # # #
@@ -295,89 +334,113 @@ dim(test_data)
 # # # # #  Scaling TBD # # # # # 
 # # # # # # # # # # # # # # # #
 
-# library("scales")
-
-# scale final price, manf yr, mileage, age
-#training_data$Final.Price = rescale(training_data$Final.Price, to=c(0,1))
-#training_data$Price.Guide = rescale(training_data$Price.Guide, to=c(0,1))
-#training_data$ERP = rescale(training_data$ERP, to=c(0,1))
-#training_data$Manf.Yr = rescale(training_data$Manf.Yr, to=c(0,1))
-#training_data$Mileage = rescale(training_data$Mileage, to=c(0,1))
-#training_data$Age = rescale(training_data$Age, to=c(0,1))
+# library("scales"), function rescale()
 
 # Text: Features Selection ------------------------------------------------
 
-# clean text remarks, e.g. do for electrical remarks only
-library(stringr)
-
-training_data$Elec_len = str_length(training_data$Elec_rmk)
-training_data$Elec_len[training_data$Elec_len == 2] = -1
-training_data['ElecUP'] = sapply(gregexpr("[A-Z]", training_data$Elec_rmk), length)
-training_data$ElecUP[training_data$Elec_rmk == -1] = -1
-training_data['ElecNC'] = sapply(gregexpr("[0-9]", training_data$Elec_rmk), length)
-training_data$ElecNC[training_data$Elec_rmk == -1] = -1
-training_data['ElecUD'] = (training_data$ElecUP/training_data$Elec_len)
-training_data['ElecND'] = (training_data$ElecNC/training_data$Elec_len)
-
-library(tm)
-corpus = VCorpus(VectorSource(training_data$Elec_rmk)) # corpus = Corpus(VectorSource(training_data$Elec_rmk))
-#inspect(corpus)
-
-corpus = tm_map(corpus, stripWhitespace) # remove extra whitespace
-corpus = tm_map(corpus, content_transformer(tolower))
-corpus = tm_map(corpus, removePunctuation) # remove punctuation
-corpus = tm_map(corpus, removeWords, stopwords('en'))
-# corpus = tm_map(corpus, stemDocument) # stemming, i.e. is, are, was, were -> be
-
-dtm = DocumentTermMatrix(corpus 
-                         # control = list(weighting = function(x) weightTfIdf(x, normalize = FALSE)) # default is weightTf
-)
-
-inspect(dtm)
-
-findFreqTerms(dtm, 50) # find terms that occur at least n times
-findAssocs(dtm, 'window', 0.5) # find terms that correlate with 0.x correlation
-
-removeSparseTerms(dtm, sparse = 0.999) # our current sparsity is very high
-
-library(NLP)
-BigramTokenizer <- function(x) unlist(lapply(ngrams(words(x), 2), paste, collapse = " "), use.names = FALSE)
-tdm <- TermDocumentMatrix(corpus, control = list(tokenize = BigramTokenizer))
-
-inspect(removeSparseTerms(tdm, 0.9999))
-findFreqTerms(tdm, 25)
-
-#dataframe <- data.frame(text=sapply(corpus, identity),stringsAsFactors=F)
-#training_data$Elec_rmk = dataframe$text
-
-training_data['Elec_rmk'] = ifelse(training_data$Elec_len == 0,-1,training_data$Elec_rmk) # separate those with descriptions and w/o  
-training_data['descWC'] = sapply(gregexpr("\\W+", training_data$Elec_rmk), length) + 1
-training_data$descWC[training_data$Elec_rmk == -1] = -1
-training_data['descWD1'] = (training_data$Elec_len/training_data$descWC)
-training_data$descWD1[training_data$Elec_rmk == -1] = -1
-training_data['descWD2'] = tan(training_data$descWD1)
-training_data$descWD2[training_data$Elec_rmk == -1] = -1
-
-# split data into 2 (below / above median price)
-# train1 = subset(train, price <= 2.833)
-# train2 = subset(train, price > 2.833)
-
-library(quanteda)
+# library(quanteda)
+quanteda_options("threads" = 4)
 corpus_elec = corpus(as.character(training_data$Elec_rmk)) # creates corpus
-#summary(corpus1)
-kwic(corpus1, 'faulty')
+corpus_eng = corpus(as.character(training_data$Eng_rmk))
+corpus_ext = corpus(as.character(training_data$Ext_rmk))
+corpus_gear = corpus(as.character(training_data$Gear_rmk))
+corpus_int = corpus(as.character(training_data$Int_rmk))
+corpus_uc = corpus(as.character(training_data$UC_rmk))
+corpus_vh = corpus(as.character(training_data$VH_rmk))
+
+# summary(corpus1)
+# kwic(corpus1, 'faulty') # key words in corpus
 
 dfm_elec <- dfm( # creates document feature matrix
-  corpus_elec, 
-  ngrams = 1,
-  remove = stopwords("english"), remove_punct = TRUE, remove_numbers = TRUE,
-  stem = FALSE)
-tf_elec <- topfeatures(dfm_elec, n = 10, decreasing=TRUE)
+  corpus_elec, ngrams = 1,
+  remove = stopwords("english"), remove_punct = TRUE, remove_numbers = TRUE, stem = FALSE
+)
+dfm_eng <- dfm(
+  corpus_eng, ngrams = 1,
+  remove = stopwords("english"), remove_punct = TRUE, remove_numbers = TRUE, stem = FALSE
+)
+dfm_ext <- dfm(
+  corpus_ext, ngrams = 1,
+  remove = stopwords("english"), remove_punct = TRUE, remove_numbers = TRUE, stem = FALSE
+)
+dfm_gear <- dfm(
+  corpus_gear, ngrams = 1,
+  remove = stopwords("english"), remove_punct = TRUE, remove_numbers = TRUE, stem = FALSE
+)
+dfm_int <- dfm(
+  corpus_int, ngrams = 1,
+  remove = stopwords("english"), remove_punct = TRUE, remove_numbers = TRUE, stem = FALSE
+)
+dfm_uc <- dfm(
+  corpus_uc, ngrams = 1,
+  remove = stopwords("english"), remove_punct = TRUE, remove_numbers = TRUE, stem = FALSE
+)
+dfm_vh <- dfm(
+  corpus_vh, ngrams = 1,
+  remove = stopwords("english"), remove_punct = TRUE, remove_numbers = TRUE, stem = FALSE
+)
 
+tf_elec <- topfeatures(dfm_elec, n = 10, decreasing=TRUE)
+tf_eng <- topfeatures(dfm_eng, n = 10, decreasing=TRUE)
+tf_ext <- topfeatures(dfm_ext, n = 10, decreasing=TRUE)
+tf_gear <- topfeatures(dfm_gear, n = 10, decreasing=TRUE)
+tf_int <- topfeatures(dfm_int, n = 10, decreasing=TRUE)
+tf_uc <- topfeatures(dfm_uc, n = 10, decreasing=TRUE)
+tf_vh <- topfeatures(dfm_vh, n = 10, decreasing=TRUE)
+
+tf_elec
+tf_eng
+tf_ext
+tf_gear
+tf_int
+tf_uc
+tf_vh
+
+library(stringr)
 
 # one-hot encoding into variables?
 keywords = c('faulty', 'malfunct')
-training_data['faulty_malfunct'] = (str_detect(training_data$Elec_rmk, paste(keywords, collapse = '|')))*1 # str_detect is partial match
+training_data['elec'] = (str_detect(training_data$Elec_rmk, paste(keywords, collapse = '|')))*1 # str_detect is partial match
+sum(training_data['elec'])
+
+keywords = c('insulator', 'damage')
+training_data['eng'] = (str_detect(training_data$Eng_rmk, paste(keywords, collapse = '|')))*1 # str_detect is partial match
+sum(training_data['eng'])
+
+keywords = c('front', 'rear', 'bumper')
+training_data['ext'] = (str_detect(training_data$Ext_rmk, paste(keywords, collapse = '|')))*1 # str_detect is partial match
+sum(training_data['ext'])
+
+keywords = c('drive', 'shaft')
+training_data['gear'] = (str_detect(training_data$Gear_rmk, paste(keywords, collapse = '|')))*1 # str_detect is partial match
+sum(training_data['gear'])
+
+keywords = c('cover', 'interior', 'miss')
+training_data['int'] = (str_detect(training_data$Int_rmk, paste(keywords, collapse = '|')))*1 # str_detect is partial match
+sum(training_data['int'])
+
+keywords = c('noise', 'knocking')
+training_data['uc'] = (str_detect(training_data$UC_rmk, paste(keywords, collapse = '|')))*1 # str_detect is partial match
+sum(training_data['uc'])
+
+keywords = c('accident', 'vehicle')
+training_data['acc_site'] = (str_detect(training_data$VH_rmk, paste(keywords, collapse = '|')))*1 # str_detect is partial match
+sum(training_data['acc_site'])
+
+keywords = c('minor')
+training_data['minor'] = (str_detect(training_data$VH_rmk, paste(keywords, collapse = '|')))*1 # str_detect is partial match
+sum(training_data['minor'])
+
+keywords = c('moderate')
+training_data['moderate'] = (str_detect(training_data$VH_rmk, paste(keywords, collapse = '|')))*1 # str_detect is partial match
+sum(training_data['moderate'])
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # 
+# Not yet done for test set
+# # # # # # # # # # # # # # # # # # # # # # # # 
+
+
 
 # Issue: 
 # 6 columns of remarks, consider merging some?
@@ -385,7 +448,60 @@ training_data['faulty_malfunct'] = (str_detect(training_data$Elec_rmk, paste(key
 # h2o.ai: skip tree-based algo, i.e. GBM, RF
 # sparse multi-layer perceptron (MLP)
 
-# Wordcloud Plot ----------------------------------------------------------
+# clean text remarks, e.g. do for electrical remarks only
+#training_data$Elec_len = str_length(training_data$Elec_rmk)
+#training_data$Elec_len[training_data$Elec_len == 2] = -1
+#training_data['ElecUP'] = sapply(gregexpr("[A-Z]", training_data$Elec_rmk), length)
+#training_data$ElecUP[training_data$Elec_rmk == -1] = -1
+#training_data['ElecNC'] = sapply(gregexpr("[0-9]", training_data$Elec_rmk), length)
+#training_data$ElecNC[training_data$Elec_rmk == -1] = -1
+#training_data['ElecUD'] = (training_data$ElecUP/training_data$Elec_len)
+#training_data['ElecND'] = (training_data$ElecNC/training_data$Elec_len)
+
+#library(tm)
+#corpus = VCorpus(VectorSource(training_data$Elec_rmk)) # corpus = Corpus(VectorSource(training_data$Elec_rmk))
+#inspect(corpus)
+
+#corpus = tm_map(corpus, stripWhitespace) # remove extra whitespace
+#corpus = tm_map(corpus, content_transformer(tolower))
+#corpus = tm_map(corpus, removePunctuation) # remove punctuation
+#corpus = tm_map(corpus, removeWords, stopwords('en'))
+# corpus = tm_map(corpus, stemDocument) # stemming, i.e. is, are, was, were -> be
+
+#dtm = DocumentTermMatrix(corpus 
+#                         # control = list(weighting = function(x) weightTfIdf(x, normalize = FALSE)) # default is weightTf
+#)
+#inspect(dtm)
+
+#findFreqTerms(dtm, 50) # find terms that occur at least n times
+#findAssocs(dtm, 'window', 0.5) # find terms that correlate with 0.x correlation
+
+#removeSparseTerms(dtm, sparse = 0.999) # our current sparsity is very high
+
+#library(NLP)
+#BigramTokenizer <- function(x) unlist(lapply(ngrams(words(x), 2), paste, collapse = " "), use.names = FALSE)
+#tdm <- TermDocumentMatrix(corpus, control = list(tokenize = BigramTokenizer))
+
+#inspect(removeSparseTerms(tdm, 0.9999))
+#findFreqTerms(tdm, 25)
+
+#dataframe <- data.frame(text=sapply(corpus, identity),stringsAsFactors=F)
+#training_data$Elec_rmk = dataframe$text
+
+#training_data['Elec_rmk'] = ifelse(training_data$Elec_len == 0,-1,training_data$Elec_rmk) # separate those with descriptions and w/o  
+#training_data['descWC'] = sapply(gregexpr("\\W+", training_data$Elec_rmk), length) + 1
+#training_data$descWC[training_data$Elec_rmk == -1] = -1
+#training_data['descWD1'] = (training_data$Elec_len/training_data$descWC)
+#training_data$descWD1[training_data$Elec_rmk == -1] = -1
+#training_data['descWD2'] = tan(training_data$descWD1)
+#training_data$descWD2[training_data$Elec_rmk == -1] = -1
+
+# split data into 2 (below / above median price)
+# train1 = subset(train, price <= 2.833)
+# train2 = subset(train, price > 2.833)
+
+
+# Wordcloud Plot (Visualization only)----------------------------------------------------------
 
 # quanteda plot
 set.seed(100)
@@ -459,10 +575,17 @@ train_pop = train_pop %>%
   as.data.frame()
 
 
-drops = c("Brand", "Date", "AuctM", "AuctQ", "Live Auct/X-Chg", "Age", "Mileage", "Mileage_yr", "Auct.Stat", "Veh Loc")
+drops = c('Date', "AuctM", "AuctQ",
+          "Live Auct/X-Chg", "Mileage", 'Age', "Auct.Stat", "Veh Loc",
+          'Elec_rmk', 'Eng_rmk', 'Ext_rmk', 'Gear_rmk', 'Int_rmk', 'UC_rmk',
+          "Mileage_yr"
+)
 
 train_pop = train_pop[, !names(train_pop) %in% drops]
 test_pop = test_pop[, !names(test_pop) %in% drops]
+
+train_pop = droplevels(train_pop) # any errors??
+test_pop = droplevels(test_pop) # any errors??
 
 dim(train_pop)
 dim(test_pop)
@@ -470,20 +593,21 @@ dim(test_pop)
 # Prep files for h2o AutoML ----------------------------------------------------------
 
 df_train = train_pop
-df_test = test_pop
+df_pred = test_pop
 
 df_train$AuctY = factor(df_train$AuctY, ordered = FALSE)
 df_train$Manf.Yr = factor(df_train$Manf.Yr, ordered = FALSE)
 df_train$Mileage_yr_Grp = factor(df_train$Mileage_yr_Grp, ordered = FALSE)
 
-df_test$AuctY = factor(df_test$AuctY, ordered = FALSE)
-df_test$Manf.Yr = factor(df_test$Manf.Yr, ordered = FALSE)
-df_test$Mileage_yr_Grp = factor(df_test$Mileage_yr_Grp, ordered = FALSE)
+df_pred$AuctY = factor(df_pred$AuctY, ordered = FALSE)
+df_pred$Manf.Yr = factor(df_pred$Manf.Yr, ordered = FALSE)
+df_pred$Mileage_yr_Grp = factor(df_pred$Mileage_yr_Grp, ordered = FALSE)
 
 # Clean data before inputing to models
-df_test = df_test[, -c(1,2)] # remove reserve price & reg. no. 
+df_pred = df_pred[, -c(1,2)] # remove reserve price & reg. no. 
 df_train = df_train[, -1] # remove reserve price
-colnames(df_test) == colnames(df_train[, -1]) # train has additional col on final bid price
+colnames(df_pred) == colnames(df_train[, -1]) # train has additional col on final bid price
+str(df_train)
 
 
 # h2o AUTOML: Japan-Top3 + National --------------------------------------------------------------
@@ -494,7 +618,7 @@ h2o.init(min_mem_size="4g", max_mem_size = "8g")
 h2o.shutdown()
 
 df_h2o_train <- as.h2o(df_train)
-df_h2o_test <- as.h2o(df_test)
+df_h2o_test <- as.h2o(df_pred)
 
 h2o.describe(df_h2o_train)
 h2o.describe(df_h2o_test)
@@ -515,17 +639,36 @@ aml_pop <- h2o.automl(x = x,
                      keep_cross_validation_predictions = TRUE,
                      validation_frame = valid,
                      leaderboard_frame = test,
-                     # exclude_algos = "GBM", # exclude_algos = c("GLM", "DeepLearning", "GBM", DRF", "StackedEnsemble"),
+                     # exclude_algos = c("GLM", "DeepLearning", "GBM", DRF", "StackedEnsemble"),
                      max_runtime_secs = 60, # max_models
                      seed = 1,
                      project_name = "p2_final_price"
 )
 
 print(aml_pop@leaderboard)
-h2o.rmse(aml_pop@leader) # 965
-# predict prices of upcoming auction
+h2o.rmse(aml_pop@leader) 
+# training RMSE: 859 (added vehicle history); 859 (with condition remarks & Brand); 965
 
-pred_automl <- h2o.predict(aml_pop, df_h2o_test)
+# analyze results by model group
+
+pred_full_h2o = as.vector(h2o.predict(aml_pop, df_h2o_train))
+df_train_est_h2o = cbind.data.frame('est.Final.Price' = pred_full_h2o, df_train)
+
+sqrt(mean((pred_full_h2o-df_train[, 1])^2)) # 1330
+
+df_train_est_h2o %>%
+  dplyr::group_by(Model_Grp) %>%
+  dplyr::summarize(
+    MAE = mean(abs(est.Final.Price - Final.Price), na.rm=TRUE),
+    RMSE = sqrt(mean((est.Final.Price - Final.Price)^2, na.rm=TRUE)),
+    est_lesser = length(Model_Grp[est.Final.Price - Final.Price < 0]),
+    est_greater = length(Model_Grp[est.Final.Price - Final.Price > 0]),
+    totalc = n()
+  ) %>%
+  dplyr::arrange(desc(MAE)) %>%
+  View
+
+pred_automl <- h2o.predict(aml_pop, df_h2o_test) # predict prices of upcoming auction
 pop_h2o_est = as.vector(pred_automl)
 
 # output in table format
@@ -544,8 +687,8 @@ write.csv(pop_tbl, file = 'pop.csv')
 
 hyper_params = list(
   
-  # max_depth = seq(1,20,2), # usual ~ 10, use c(4,6,8,12,16,20) faster for larger datasets
-  max_depth = seq(minDepth, maxDepth, 1),
+  max_depth = seq(1,20,2), # usual ~ 10, use c(4,6,8,12,16,20) faster for larger datasets
+  #max_depth = seq(minDepth, maxDepth, 1),
   learn_rate = seq(0.05, 0.1, 0.01), # smaller learning rate is better
   learn_rate_annealing = 0.99, # learning_rate shrinks by 1% after every tree, use 1.00 to disable
   
@@ -604,7 +747,6 @@ minDepth
 maxDepth
 # redo grid search with specified depth range
 
-
 pred_gbm <- h2o.predict(h2o.getModel(sortedGrid@model_ids[[1]]), df_h2o_test)
 
 pred_gbm = as.data.frame(pred_gbm)
@@ -620,6 +762,95 @@ pop_tbl_gbm = cbind.data.frame(
 )
 
 write.csv(pop_tbl_gbm, file = 'pop_gbm.csv')
+
+
+
+
+
+# XGBoost -----------------------------------------------------------------
+
+# # # # # # # # # # # # # # # # # 
+# Matrix format can preserve ordered factors!!
+# Consider use original dataset, dunno how it affects the test set
+#
+#
+# # # # # # # # # # # # # # # # # 
+
+str(df_train)
+str(df_pred)
+
+library(xgboost)
+
+library(caret)
+set.seed(1234)
+trainIndex <- createDataPartition(
+  df_train$Final.Price, p = 0.7,
+  list = FALSE, 
+  times = 1
+)
+validtest_set = df_train[-trainIndex, ]
+validtestIndex <- createDataPartition(
+  validtest_set$Final.Price, p = 0.5,
+  list = FALSE, 
+  times = 1
+)
+
+train_data_xgb = data.matrix(df_train[trainIndex, ])
+valid_data_xgb= data.matrix(validtest_set[validtestIndex, ])
+test_data_xgb= data.matrix(validtest_set[-validtestIndex, ])
+
+dim(train_data_xgb)
+dim(valid_data_xgb)
+dim(test_data_xgb)
+
+dtrain <- xgb.DMatrix(data = train_data_xgb[, -1], label = train_data_xgb[, 1])
+dvalid <- xgb.DMatrix(data = valid_data_xgb[, -1], label = valid_data_xgb[, 1])
+dtest <- xgb.DMatrix(data = test_data_xgb[, -1], label = test_data_xgb[, 1])
+
+#bstSparse <- xgboost( # simple implementation
+#  data = dtrain, max.depth = 2, eta = 1, nthread = 3,
+#  nrounds = 2, objective = 'reg:linear',
+#  verbose = 2
+#)
+
+xgPrm = list(
+  boost='gbtree',objective='reg:linear',colsample_bytree=1,
+  eta=0.11,max_depth=9,min_child_weight=1,alpha=0.3,
+  lambda=0.4,gamma=0.2,subsample=0.8,seed=5,silent=TRUE
+)
+
+xgbModel = xgb.train(
+  xgPrm, dtrain, nrounds=300, 
+  watchlist=list(train=dtrain, test=dvalid)
+)
+
+pred <- predict(xgbModel, dtest)
+
+err <- sqrt(mean((pred-test_data_xgb[, 1])^2))
+err # 2233 (with train, valid, test)
+
+# analyze results by model group
+full_data = data.matrix(df_train)
+dfull <- xgb.DMatrix(data = full_data[, -1], label = full_data[, 1])
+pred_full_xgb <- predict(xgbModel, dfull)
+df_train_est_xgb = cbind.data.frame('est.Final.Price' = pred_full_xgb, df_train)
+
+# use this to benchmark with h2o predictions
+sqrt(mean((pred_full_xgb-df_train[, 1])^2)) # 1239
+
+
+df_train_est_xgb %>%
+  dplyr::group_by(Model_Grp) %>%
+  dplyr::summarize(
+    MAE = mean(abs(est.Final.Price - Final.Price), na.rm=TRUE),
+    RMSE = sqrt(mean((est.Final.Price - Final.Price)^2, na.rm=TRUE)),
+    est_lesser = length(Model_Grp[est.Final.Price - Final.Price < 0]),
+    est_greater = length(Model_Grp[est.Final.Price - Final.Price > 0]),
+    totalc = n()
+  ) %>%
+  dplyr::arrange(desc(MAE)) %>%
+  View
+
 
 
 # Perodua -----------------------------------------------------------------
