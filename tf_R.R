@@ -14,18 +14,28 @@ library(keras)
 str(df_train)
 str(df_pred)
 
+library(caret)
+set.seed(123)
+trainIndex <- createDataPartition(df_train$Variant, p = .8, 
+                                  list = FALSE, 
+                                  times = 1)
+
+df_split_train = df_train[trainIndex, ]
+df_split_valid = df_train[-trainIndex, ]
+
 
 # Data Prep ---------------------------------------------------------------
 
+# Prep training data
 # split response variable from dataset
-train_labels = df_train[, 1]
+train_labels = df_split_train[, 1]
 
 # train_data = data.matrix(df_train[, -1])
 # create dummy variable for categorical variables
 fct_col = model.matrix( ~ Brand + Model_Grp + Variant +
                           Elect.R + Eng.R + Ext.R + Gearb.R +
                           Int.R + UC.R +Struct.R + Flood.R + Mileage_yr_Grp - 1, 
-                        data=df_train
+                        data=df_split_train
                       )[, -1] # Note if N/A available, errors may occur, i.e. random 0/1, soln is to code NA to smth else
 
 # alternate soln for dummy var
@@ -36,29 +46,38 @@ fct_col = model.matrix( ~ Brand + Model_Grp + Variant +
 # head(binom)
 
 # problem: col 19:27 why have NAs shud be 0
-num_col = as.matrix(sapply(df_train[, c(1, 6, 7, 8, 9, 19:27)], as.numeric))
-head(num_col)
-num_col_yr = as.numeric(df_train$Manf.Yr) # manf yr prepped as factored
-
+num_col = as.matrix(sapply(df_split_train[, c(6, 7, 8, 9, 19:27)], as.numeric))
+num_col_yr = as.numeric(df_split_train$Manf.Yr) # manf yr prepped as factored
 
 # merge data in matrix form
 train_data = cbind(fct_col, num_col, num_col_yr)
 
-# predicted data not formatted yet, i.e. remarks not incl
-# test_data = data.matrix(df_pred)
+# Prep validation data
+# split response variable from dataset
+test_labels = df_split_valid[, 1]
 
-# normalize data (suggested by keras rstudio), for faster convergence?
-# test data not used when calculating mean / std
+fct_col_valid = model.matrix( ~ Brand + Model_Grp + Variant +
+                          Elect.R + Eng.R + Ext.R + Gearb.R +
+                          Int.R + UC.R +Struct.R + Flood.R + Mileage_yr_Grp - 1, 
+                        data=df_split_valid)[, -1]
 
-# Normalize training data
+num_col_valid = as.matrix(sapply(df_split_valid[, c(6, 7, 8, 9, 19:27)], as.numeric))
+num_col_yr_valid = as.numeric(df_split_valid$Manf.Yr)
+
+test_data = cbind(fct_col_valid, num_col_valid, num_col_yr_valid) # merge data in matrix form
+
+# Normalize data (suggested by keras rstudio), for faster convergence?
+# Test data not used when calculating mean / std
+# dimnames(train_data)[[1]] <- NULL; wont work for NULL
+rownames(train_data) <- NULL
+rownames(test_data) <- NULL
+
 train_data <- scale(train_data) # do we need to scale binary? end result is the same, converted 0/1 to some number x/y
 
-# # Use means and standard deviations from training set to normalize test set
-# col_means_train <- attr(train_data, "scaled:center") 
-# col_stddevs_train <- attr(train_data, "scaled:scale")
-# test_data <- scale(test_data, center = col_means_train, scale = col_stddevs_train)
-
-train_data[1, ] # First training sample, normalized
+# Use means and standard deviations from training set to normalize test set
+col_means_train <- attr(train_data, "scaled:center") 
+col_stddevs_train <- attr(train_data, "scaled:scale")
+test_data <- scale(test_data, center = col_means_train, scale = col_stddevs_train)
 
 
 # (Not required?) split dataset into training and validation set, set during training process
@@ -69,9 +88,9 @@ train_data[1, ] # First training sample, normalized
 build_model <- function() {
   
   model <- keras_model_sequential() %>%
-    layer_dense(units = 64, activation = "relu",
+    layer_dense(units = 512, activation = "relu",
                 input_shape = dim(train_data)[2]) %>%
-    layer_dense(units = 64, activation = "relu") %>%
+    layer_dense(units = 512, activation = "relu") %>%
     layer_dense(units = 1)
   
   model %>% compile(
@@ -102,8 +121,9 @@ epochs <- 100
 history <- model %>% fit(
   train_data,
   train_labels,
-  epochs = epochs,
-  validation_split = 0.2,
+  epochs = 500,
+  #validation_split = 0.2, # use last 20% of data only
+  validation_data = list(test_data, test_labels),
   verbose = 0,
   callbacks = list(print_dot_callback)
 )
@@ -273,10 +293,10 @@ ggplot(compare_cx, aes(x = rowname, y = value, color = type)) +
 
 dropout_model <- 
   keras_model_sequential() %>%
-  layer_dense(units = 16, activation = "relu", 
+  layer_dense(units = 64, activation = "relu", 
               input_shape = dim(train_data)[2]) %>%
   layer_dropout(0.6) %>% # fraction of features being zeroed out in layer
-  layer_dense(units = 16, activation = "relu") %>%
+  layer_dense(units = 64, activation = "relu") %>%
   layer_dropout(0.6) %>%
   layer_dense(units = 1)
 
@@ -289,10 +309,10 @@ dropout_model %>% compile(
 dropout_history <- dropout_model %>% fit(
   train_data,
   train_labels,
-  epochs = epochs,
+  epochs = 500,
   #batch_size = 512,
-  validation_split = 0.2,
-  #validation_data = list(test_data, test_labels),
+  #validation_split = 0.2,
+  validation_data = list(test_data, test_labels),
   verbose = 0,
   callbacks = list(print_dot_callback)
 )
