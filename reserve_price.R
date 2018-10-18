@@ -575,7 +575,10 @@ dim(df_train)
 dim(df_pred)
 
 
-# h2o AUTOML: Japan-Top3 + National --------------------------------------------------------------
+
+
+# h2o Update (Uncomment to update) --------------------------------------------------------------
+
 
 # Update to latest h2o stable release, weird some packages are deleted
 # # The following two commands remove any previously installed H2O packages for R.
@@ -591,41 +594,75 @@ dim(df_pred)
 # # # Now we download, install and initialize the H2O package for R.
 # install.packages("h2o", type="source", repos="http://h2o-release.s3.amazonaws.com/h2o/rel-wright/9/R")
 
+
+# Split data for train, valid, test ---------------------------------------
+
+library(caret)
+set.seed(123)
+trainIndex <- createDataPartition(df_train$Final.Price, p = .7, 
+                                  list = FALSE, 
+                                  times = 1)
+
+df_split_train = df_train[trainIndex, ]
+df_split_nonTrain = df_train[-trainIndex, ]
+
+validIndex <- createDataPartition(df_split_nonTrain$Final.Price, p = .5, 
+                                  list = FALSE, 
+                                  times = 1)
+
+df_split_valid = df_split_nonTrain[validIndex, ]
+df_split_test = df_split_nonTrain[-validIndex, ]
+
+dim(df_split_train)
+dim(df_split_valid)
+dim(df_split_test)
+
+
+# h2o AUTOML: Japan-Top3 + National --------------------------------------------------------------
+
 # Finally, let's load H2O and start up an H2O cluster
 library(h2o)
 h2o.init(min_mem_size="4g", max_mem_size = "8g")
 h2o.shutdown()
 
-df_h2o_train <- as.h2o(df_train)
-df_h2o_test <- as.h2o(df_pred)
+df_h2o_train <- as.h2o(df_split_train)
+df_h2o_valid <- as.h2o(df_split_valid)
+df_h2o_test <- as.h2o(df_split_test)
+
 
 # h2o.describe(df_h2o_train)
 # h2o.describe(df_h2o_test)
 
 y <- 'Final.Price'
 # y <- 'Res.Price'
-x <- setdiff(names(df), y)
+x <- setdiff(names(df_h2o_train), y)
 
 splits <- h2o.splitFrame(df_h2o_train, ratios = c(0.7, .15) , seed = 1)
-train <- splits[[1]]
-valid <- splits[[2]]
-test <- splits[[3]]
+# train <- splits[[1]]
+# valid <- splits[[2]]
+# test <- splits[[3]]
 
-aml_pop <- h2o.automl(x = x, # note filter for Jap-Top 3 & National
+aml_selected <- h2o.automl(x = x, # note filter for Jap-Top 3 & National
                      y = y,
-                     training_frame = train,
+                     training_frame = df_h2o_train,
                      nfolds = 5,
                      keep_cross_validation_predictions = TRUE,
-                     validation_frame = valid,
-                     leaderboard_frame = test,
+                     validation_frame = df_h2o_valid,
+                     leaderboard_frame = df_h2o_test,
                      # exclude_algos = c("GLM", "DeepLearning", "GBM", DRF", "StackedEnsemble"),
-                     max_runtime_secs = 60, # max_models
+                     max_runtime_secs = 3600, # max_models
                      seed = 1,
-                     project_name = "p2_final_price"
+                     project_name = "selected_final_price"
 )
 
-print(aml_pop@leaderboard)
-h2o.rmse(aml_pop@leader, valid = TRUE)
+print(aml_selected@leaderboard)
+h2o.rmse(aml_selected@leader, valid = TRUE)
+
+# (Jap-Top3 & Natl, filtered model)
+# 1 min, gbm model validation error: 2.3k 
+# 10 mins, stacked ensemble, validation error 2.26k
+# 1 hr, stacked ensemble, validation error 2.22k
+
 # validation error: 2.2k (Jap-Top3 & Natl, filtered model)
 
 # Note all previous metrics are training errors
@@ -648,8 +685,8 @@ aml_all <- h2o.automl(x = x, # note incl all variants
 h2o.rmse(aml_all@leader, valid=TRUE) # 2,291 (training error), valid error 2.4k
 
 
-# model_path <- h2o.saveModel(object = h2o.getModel(aml_pop@leader@model_id), path = getwd(), force = TRUE)
-h2o_saved_model <- h2o.loadModel(model_path)
+# model_path <- h2o.saveModel(object = h2o.getModel(aml_selected@leader@model_id), path = getwd(), force = TRUE)
+# h2o_best_model <- h2o.loadModel(model_path)
 
 
 # analyze results by model group, shud compare valid/test set only
