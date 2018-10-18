@@ -9,16 +9,13 @@
 # data = read.csv("ConsolAD_Apr18.csv")
 # data = read.csv("ConsolAD_Jun18.csv")
 data = read.csv('ConsolAD_Jul18.csv', encoding = 'UTF-8')
-verify_data = read.csv("actRP_24Aug18.csv")
+verify_data = read.csv("actRP_30Aug18.csv")
 
-# Extract and form df -----------------------------------------------------
+# Extract and form df (Note: testing rmks) -----------------------------------------------------
 
-str(data)
-str(verify_data)
-head(data)
 training_data = cbind.data.frame(
   data$Reserve.Price, data$Final.bid.price,
-  data$Auction.Date, data$Auction.Year, # note utf-8 start format changed for Auction Date
+  data$Auction.Date, data$Auction.Year, # note utf-8 file start format changed for Auction Date
   data$Auction.Month, data$Auction.Quarter,
   data$Brand, data$Model.Group,
   data$Live.Auction...X.Change,
@@ -108,11 +105,29 @@ test_data = dplyr::filter(test_data, (Manf.Yr >= 2000) & !is.na(Manf.Yr))
 # # # # # # # # # # # # # # # # # # 
 
 training_data$Brand = as.factor(toupper(trimws(training_data$Brand)))
+
+plyr::count(training_data$Brand)
+
+# categorize Make_Popular into: "HOT", "COLD_PREMIUM", "COLD_NONPREMIUM"
+training_data$Make_Popular = as.factor(dplyr::case_when(
+                                    training_data$Brand %in% c("HONDA", "NISSAN", "TOYOTA", "PROTON", "PERODUA") ~ "HOT",
+                                    training_data$Brand %in% c("ALFA ROMEO", "BMW", "MERCEDES BENZ", "VOLVO", "PORSCHE", "ROVER", 
+                                                               "LAND ROVER", "MG ROVER", "MINI. UNITED KINGDOM", "AUDI", "JAGUAR", 
+                                                               "INFINITI","LEXUS") ~ "COLD_PREMIUM",
+                                    TRUE ~ "COLD_NONPREMIUM"))
+
 training_data$Model_Grp = as.factor(toupper(trimws(training_data$Model_Grp)))
 training_data$Variant = as.factor(toupper(trimws(training_data$Variant)))
 training_data$Auct.Stat = as.factor(toupper(trimws(training_data$Auct.Stat)))
 
 test_data$Brand = as.factor(toupper(trimws(test_data$Brand)))
+test_data$Make_Popular = as.factor(dplyr::case_when(
+  test_data$Brand %in% c("HONDA", "NISSAN", "TOYOTA", "PROTON", "PERODUA") ~ "HOT",
+  test_data$Brand %in% c("ALFA ROMEO", "BMW", "MERCEDES BENZ", "VOLVO", "PORSCHE", "ROVER", 
+                             "LAND ROVER", "MG ROVER", "MINI. UNITED KINGDOM", "AUDI", "JAGUAR", 
+                             "INFINITI","LEXUS") ~ "COLD_PREMIUM",
+  TRUE ~ "COLD_NONPREMIUM"))
+
 test_data$Model_Grp = as.factor(toupper(trimws(test_data$Model_Grp)))
 test_data$Variant = as.factor(toupper(trimws(test_data$Variant)))
 
@@ -501,6 +516,186 @@ sum(training_data['moderate'])
 # train2 = subset(train, price > 2.833)
 
 
+# Japan Top 3 & 2 National Make -------------------------------------------
+
+train_pop = dplyr::filter(training_data, Brand %in% c("PERODUA",'PROTON', 'NISSAN', 'TOYOTA', 'HONDA') & 
+                            !is.na(Variant) &
+                            !(Elect.R %in% c("", "N")) & !(Eng.R %in% c("", "N")) & !(Ext.R %in% c("","N")) & 
+                            !(Gearb.R %in% c("", "N")) & !(Int.R %in% c("", "N")) & !(UC.R %in% c("", "N")) &
+                            !(Struct.R %in% c("", "N"))
+)
+
+test_pop = dplyr::filter(test_data, Brand %in% c("PERODUA",'PROTON', 'NISSAN', 'TOYOTA', 'HONDA') & 
+                           !is.na(Variant) &
+                           !(Elect.R %in% c("", "N")) & !(Eng.R %in% c("", "N")) & !(Ext.R %in% c("","N")) & 
+                           !(Gearb.R %in% c("", "N")) & !(Int.R %in% c("", "N")) & !(UC.R %in% c("", "N")) &
+                           !(Struct.R %in% c("", "N"))
+)
+
+
+# train_pop = train_pop %>% 
+#   dplyr::group_by(Variant) %>%
+#   dplyr::filter(n()>10) %>%
+#   as.data.frame()
+
+
+drops = c('Date', "AuctM", "AuctQ",
+          "Live Auct/X-Chg", "Mileage", 'Age', "Auct.Stat", "Veh Loc",
+          'Elec_rmk', 'Eng_rmk', 'Ext_rmk', 'Gear_rmk', 'Int_rmk', 'UC_rmk',
+          "Mileage_yr", "VH_rmk", "Make_Popular" # drop Make_Popular when filtered Jap-Top3 & Natl
+)
+
+train_pop = train_pop[, !names(train_pop) %in% drops]
+test_pop = test_pop[, !names(test_pop) %in% drops]
+
+train_pop = droplevels(train_pop) # any errors??
+test_pop = droplevels(test_pop) # any errors??
+
+dim(train_pop)
+dim(test_pop)
+
+# Prep files for h2o AutoML ----------------------------------------------------------
+
+df_train = train_pop
+df_pred = test_pop
+
+df_train$AuctY = factor(df_train$AuctY, ordered = FALSE)
+df_train$Manf.Yr = factor(df_train$Manf.Yr, ordered = FALSE)
+df_train$Mileage_yr_Grp = factor(df_train$Mileage_yr_Grp, ordered = FALSE)
+
+df_pred$AuctY = factor(df_pred$AuctY, ordered = FALSE)
+df_pred$Manf.Yr = factor(df_pred$Manf.Yr, ordered = FALSE)
+df_pred$Mileage_yr_Grp = factor(df_pred$Mileage_yr_Grp, ordered = FALSE)
+
+# Clean data before inputing to models
+df_pred = df_pred[, -c(1,2)] # remove reserve price & reg. no. 
+df_train = df_train[, -1] # remove reserve price
+colnames(df_pred) == colnames(df_train[, -1]) # train has additional col on final bid price
+dim(df_train)
+dim(df_pred)
+
+
+# h2o AUTOML: Japan-Top3 + National --------------------------------------------------------------
+
+# Update to latest h2o stable release, weird some packages are deleted
+# # The following two commands remove any previously installed H2O packages for R.
+# if ("package:h2o" %in% search()) { detach("package:h2o", unload=TRUE) }
+# if ("h2o" %in% rownames(installed.packages())) { remove.packages("h2o") }
+# 
+# # Next, we download packages that H2O depends on.
+# pkgs <- c("RCurl","jsonlite")
+# for (pkg in pkgs) {
+#   if (! (pkg %in% rownames(installed.packages()))) { install.packages(pkg) }
+# }
+# 
+# # # Now we download, install and initialize the H2O package for R.
+# install.packages("h2o", type="source", repos="http://h2o-release.s3.amazonaws.com/h2o/rel-wright/9/R")
+
+# Finally, let's load H2O and start up an H2O cluster
+library(h2o)
+h2o.init(min_mem_size="4g", max_mem_size = "8g")
+h2o.shutdown()
+
+df_h2o_train <- as.h2o(df_train)
+df_h2o_test <- as.h2o(df_pred)
+
+# h2o.describe(df_h2o_train)
+# h2o.describe(df_h2o_test)
+
+y <- 'Final.Price'
+# y <- 'Res.Price'
+x <- setdiff(names(df), y)
+
+splits <- h2o.splitFrame(df_h2o_train, ratios = c(0.7, .15) , seed = 1)
+train <- splits[[1]]
+valid <- splits[[2]]
+test <- splits[[3]]
+
+aml_pop <- h2o.automl(x = x, # note filter for Jap-Top 3 & National
+                     y = y,
+                     training_frame = train,
+                     nfolds = 5,
+                     keep_cross_validation_predictions = TRUE,
+                     validation_frame = valid,
+                     leaderboard_frame = test,
+                     # exclude_algos = c("GLM", "DeepLearning", "GBM", DRF", "StackedEnsemble"),
+                     max_runtime_secs = 60, # max_models
+                     seed = 1,
+                     project_name = "p2_final_price"
+)
+
+print(aml_pop@leaderboard)
+h2o.rmse(aml_pop@leader, valid = TRUE)
+# validation error: 2.2k (Jap-Top3 & Natl, filtered model)
+
+# Note all previous metrics are training errors
+# ~2k with Make_Popular tag, 1,177 after removed
+# training RMSE: 859 (added vehicle history); 859 (with condition remarks & Brand); 965
+
+aml_all <- h2o.automl(x = x, # note incl all variants
+                      y = y,
+                      training_frame = train,
+                      nfolds = 5,
+                      keep_cross_validation_predictions = TRUE,
+                      validation_frame = valid,
+                      leaderboard_frame = test,
+                      # exclude_algos = c("GLM", "DeepLearning", "GBM", DRF", "StackedEnsemble"),
+                      max_runtime_secs = 600, # max_models
+                      seed = 1,
+                      project_name = "final_price_all"
+)
+
+h2o.rmse(aml_all@leader, valid=TRUE) # 2,291 (training error), valid error 2.4k
+
+
+# model_path <- h2o.saveModel(object = h2o.getModel(aml_pop@leader@model_id), path = getwd(), force = TRUE)
+h2o_saved_model <- h2o.loadModel(model_path)
+
+
+# analyze results by model group, shud compare valid/test set only
+
+pred_full_h2o = as.vector(h2o.predict(h2o_saved_model, df_h2o_train))
+df_train_est_h2o = cbind.data.frame('est.Final.Price' = pred_full_h2o, df_train)
+
+
+pred_all = as.vector(h2o.predict(aml_all, df_h2o_train))
+
+sqrt(mean((pred_all-df_train[,1])^2)) # 2,346 (full mode, full dataset)
+
+# filter out Jap-Top 3 & National make to compare with below, re-run data prep
+pred_selected_full_model = as.vector(h2o.predict(aml_all, df_h2o_train))
+
+sqrt(mean((pred_selected_full_model-df_train[,1])^2)) # 2,291 (full model, Jap-Top3 & National dataset)
+sqrt(mean((pred_full_h2o-df_train[, 1])^2)) # 1,330 (Jap-Top3 & National)
+
+
+df_train_est_h2o %>%
+  dplyr::group_by(Model_Grp) %>%
+  dplyr::summarize(
+    MAE = mean(abs(est.Final.Price - Final.Price), na.rm=TRUE),
+    RMSE = sqrt(mean((est.Final.Price - Final.Price)^2, na.rm=TRUE)),
+    est_lesser = length(Model_Grp[est.Final.Price - Final.Price < 0]),
+    est_greater = length(Model_Grp[est.Final.Price - Final.Price > 0]),
+    totalc = n()
+  ) %>%
+  dplyr::arrange(desc(MAE)) %>%
+  View
+
+# predict prices of upcoming auction
+pred_automl <- h2o.predict(h2o_saved_model, df_h2o_test)
+pop_h2o_est = as.vector(pred_automl)
+
+# output in table format
+pop_tbl = cbind.data.frame(
+  'Model' = as.character(test_pop$Model_Grp),
+  'Variant' = as.character(test_pop$Variant),
+  'Reg. No.' = as.character(test_pop$Reg.No.),
+  'Actual Res. Price' = test_pop$Res.Price, 
+  'Est Final Price' = pop_h2o_est
+)
+
+write.csv(pop_tbl, file = 'pop.csv')
+
 # Wordcloud Plot (Visualization only)----------------------------------------------------------
 
 # quanteda plot
@@ -550,138 +745,6 @@ ggplot(termFrame1, aes(x=reorder(term,ratio), y=ratio))+
 #  ggtitle('Term Frequency Ratio - Below Median Pricing - item_description')+
 #  geom_abline(intercept = 0.5, slope = 0,color="red")+
 #  xlab('Term')
-
-
-# Japan Top 3 & 2 National Make -------------------------------------------
-
-train_pop = dplyr::filter(training_data, Brand %in% c("PERODUA",'PROTON', 'NISSAN', 'TOYOTA', 'HONDA') & 
-                            !is.na(Variant) &
-                            !(Elect.R %in% c("", "N")) & !(Eng.R %in% c("", "N")) & !(Ext.R %in% c("","N")) & 
-                            !(Gearb.R %in% c("", "N")) & !(Int.R %in% c("", "N")) & !(UC.R %in% c("", "N")) &
-                            !(Struct.R %in% c("", "N"))
-)
-
-test_pop = dplyr::filter(test_data, Brand %in% c("PERODUA",'PROTON', 'NISSAN', 'TOYOTA', 'HONDA') & 
-                           !is.na(Variant) &
-                           !(Elect.R %in% c("", "N")) & !(Eng.R %in% c("", "N")) & !(Ext.R %in% c("","N")) & 
-                           !(Gearb.R %in% c("", "N")) & !(Int.R %in% c("", "N")) & !(UC.R %in% c("", "N")) &
-                           !(Struct.R %in% c("", "N"))
-)
-
-
-train_pop = train_pop %>% 
-  dplyr::group_by(Variant) %>%
-  dplyr::filter(n()>10) %>%
-  as.data.frame()
-
-
-drops = c('Date', "AuctM", "AuctQ",
-          "Live Auct/X-Chg", "Mileage", 'Age', "Auct.Stat", "Veh Loc",
-          'Elec_rmk', 'Eng_rmk', 'Ext_rmk', 'Gear_rmk', 'Int_rmk', 'UC_rmk',
-          "Mileage_yr"
-)
-
-train_pop = train_pop[, !names(train_pop) %in% drops]
-test_pop = test_pop[, !names(test_pop) %in% drops]
-
-train_pop = droplevels(train_pop) # any errors??
-test_pop = droplevels(test_pop) # any errors??
-
-dim(train_pop)
-dim(test_pop)
-
-# Prep files for h2o AutoML ----------------------------------------------------------
-
-df_train = train_pop
-df_pred = test_pop
-
-df_train$AuctY = factor(df_train$AuctY, ordered = FALSE)
-df_train$Manf.Yr = factor(df_train$Manf.Yr, ordered = FALSE)
-df_train$Mileage_yr_Grp = factor(df_train$Mileage_yr_Grp, ordered = FALSE)
-
-df_pred$AuctY = factor(df_pred$AuctY, ordered = FALSE)
-df_pred$Manf.Yr = factor(df_pred$Manf.Yr, ordered = FALSE)
-df_pred$Mileage_yr_Grp = factor(df_pred$Mileage_yr_Grp, ordered = FALSE)
-
-# Clean data before inputing to models
-df_pred = df_pred[, -c(1,2)] # remove reserve price & reg. no. 
-df_train = df_train[, -1] # remove reserve price
-colnames(df_pred) == colnames(df_train[, -1]) # train has additional col on final bid price
-str(df_train)
-
-
-# h2o AUTOML: Japan-Top3 + National --------------------------------------------------------------
-
-# initiate h2o and train models
-library(h2o)
-h2o.init(min_mem_size="4g", max_mem_size = "8g")
-h2o.shutdown()
-
-df_h2o_train <- as.h2o(df_train)
-df_h2o_test <- as.h2o(df_pred)
-
-h2o.describe(df_h2o_train)
-h2o.describe(df_h2o_test)
-
-y <- 'Final.Price'
-# y <- 'Res.Price'
-x <- setdiff(names(df), y)
-
-splits <- h2o.splitFrame(df_h2o_train, ratios = c(0.7, .15) , seed = 1)
-train <- splits[[1]]
-valid <- splits[[2]]
-test <- splits[[3]]
-
-aml_pop <- h2o.automl(x = x,
-                     y = y,
-                     training_frame = train,
-                     nfolds = 5,
-                     keep_cross_validation_predictions = TRUE,
-                     validation_frame = valid,
-                     leaderboard_frame = test,
-                     # exclude_algos = c("GLM", "DeepLearning", "GBM", DRF", "StackedEnsemble"),
-                     max_runtime_secs = 60, # max_models
-                     seed = 1,
-                     project_name = "p2_final_price"
-)
-
-print(aml_pop@leaderboard)
-h2o.rmse(aml_pop@leader) 
-# training RMSE: 859 (added vehicle history); 859 (with condition remarks & Brand); 965
-
-# analyze results by model group
-
-pred_full_h2o = as.vector(h2o.predict(aml_pop, df_h2o_train))
-df_train_est_h2o = cbind.data.frame('est.Final.Price' = pred_full_h2o, df_train)
-
-sqrt(mean((pred_full_h2o-df_train[, 1])^2)) # 1330
-
-df_train_est_h2o %>%
-  dplyr::group_by(Model_Grp) %>%
-  dplyr::summarize(
-    MAE = mean(abs(est.Final.Price - Final.Price), na.rm=TRUE),
-    RMSE = sqrt(mean((est.Final.Price - Final.Price)^2, na.rm=TRUE)),
-    est_lesser = length(Model_Grp[est.Final.Price - Final.Price < 0]),
-    est_greater = length(Model_Grp[est.Final.Price - Final.Price > 0]),
-    totalc = n()
-  ) %>%
-  dplyr::arrange(desc(MAE)) %>%
-  View
-
-pred_automl <- h2o.predict(aml_pop, df_h2o_test) # predict prices of upcoming auction
-pop_h2o_est = as.vector(pred_automl)
-
-# output in table format
-pop_tbl = cbind.data.frame(
-  'Model' = as.character(test_pop$Model_Grp),
-  'Variant' = as.character(test_pop$Variant),
-  'Reg. No.' = as.character(test_pop$Reg.No.),
-  'Actual Res. Price' = test_pop$Res.Price, 
-  'Est Final Price' = pop_h2o_est
-)
-
-write.csv(pop_tbl, file = 'pop.csv')
-
 
 # h2o GBM grid search -----------------------------------------------------
 
