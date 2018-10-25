@@ -1,15 +1,18 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #                       NOTE:                         #
+# create file by copying table from Power BI          #
 # Append PG & ERP to training data set before running #
 #                                                     #
-#                                                     #
+# training data & prediction data have different      #
+# format                                              #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 
 # data = read.csv("ConsolAD_Apr18.csv")
 # data = read.csv("ConsolAD_Jun18.csv")
-data = read.csv('ConsolAD_Jul18.csv', encoding = 'UTF-8')
-verify_data = read.csv("actRP_30Aug18.csv")
+# data = read.csv('ConsolAD_Jul18.csv', encoding = 'UTF-8')
+data = read.csv('ConsolAD_17Oct_2018.csv', encoding = 'UTF-8')
+verify_data = read.csv("DisposalTemplate.csv")
 
 # Extract and form df (Note: testing rmks) -----------------------------------------------------
 
@@ -18,21 +21,28 @@ training_data = cbind.data.frame(
   data$Auction.Date, data$Auction.Year, # note utf-8 file start format changed for Auction Date
   data$Auction.Month, data$Auction.Quarter,
   data$Brand, data$Model.Group,
-  data$Live.Auction...X.Change,
-  data$Adj..Var., # adj. in Excel
-  data$Adj..PG, data$Adj..ERP, # need to import from PG
-  data$Auct.Freq, # adj. in Excel
-  data$Manufacturing.Year, data$Mileage, data$Vehicle.Age,
+  data$Auction.Platform, 
+  # data$Live.Auction...X.Change,
+  data$Variants.Standardization, 
+  #data$Adj..Var., # adj. in Excel
+  data$PG, data$ERP,
+  #data$Adj..PG, data$Adj..ERP, # need to import from PG
+  data$Auction.Freq..by.Auction.Session.,
+  #data$Auct.Freq, # adj. in Excel
+  data$Manufacturing.Year, data$Mileage, #data$Vehicle.Age,
   data$Auction.Status, data$Vehicle.Location,
+  data$Capacity,
   # data$MUV.Grade, # first grading scheme
   # data$VAS.Exterior.Grade, data$VAS.Interior.Grade, # second grading scheme
   # third grading scheme
   data$MOS.Electrical.Rating, data$MOS.Engine.Rating, data$MOS.Exterior.Rating,
   data$MOS.Gearbox.Rating, data$MOS.Interior.Rating, data$MOS.Undercarriage.Rating,
   data$MOS.Structure.Rating, data$MOS.Flood.Rating,
-  data$Electrical_Rmks, data$Engine_Rmks, data$Exterior_Rmks,
-  data$Gearbox_Rmks, data$Interior_Rmks, data$UC_Rmks, data$VehHist_Rmks
-)
+  data$CommentsElec, data$CommentsEng, data$CommentsExt,
+  data$CommentsGear, data$CommentsInt, data$CommentsUnderCarr, data$CommentsVehHistory)
+  
+  # data$Electrical_Rmks, data$Engine_Rmks, data$Exterior_Rmks,
+  # data$Gearbox_Rmks, data$Interior_Rmks, data$UC_Rmks, data$VehHist_Rmks)
 
 names(training_data) = c(
   "Res.Price", "Final.Price",
@@ -43,28 +53,29 @@ names(training_data) = c(
   "Variant",
   "Price.Guide", "ERP",
   'Auct.Freq',
-  "Manf.Yr", "Mileage", "Age",
+  "Manf.Yr", "Mileage", # "Age",
   "Auct.Stat", "Veh Loc",
   # "Grade",
   # "Ext", "Int",
+  'CC',
   "Elect.R", "Eng.R", "Ext.R",
   "Gearb.R", "Int.R", "UC.R",
   "Struct.R", "Flood.R",
   'Elec_rmk', 'Eng_rmk', 'Ext_rmk',
-  'Gear_rmk', 'Int_rmk', 'UC_rmk', 'VH_rmk'
-)
+  'Gear_rmk', 'Int_rmk', 'UC_rmk', 'VH_rmk')
 
 test_data = cbind.data.frame(
-  verify_data$Proposed.Reserve.Price, verify_data$Reg..No., as.factor(format(Sys.Date(), "%Y")),
+  verify_data$Proposed.Reserve.Price..RM., verify_data$Reg..No., as.factor(format(Sys.Date(), "%Y")),
   verify_data$Make, verify_data$Model,
   verify_data$Variants.Standardization,
-  verify_data$Price.Guide, verify_data$Approved.Final.ERP,
+  verify_data$Price.Guide..RM., verify_data$Approved.Final.ERP,
   verify_data$No..of.times.in.auction,
   verify_data$Year.Make, verify_data$Mileage,
   verify_data$Electrical, verify_data$Engine, verify_data$Ext.Grade,
   verify_data$Gearbox, verify_data$Interior, verify_data$Undercarriage,
-  verify_data$Structure, verify_data$Flooded.Rating
-)
+  verify_data$Structure, verify_data$Flooded.Rating,
+  verify_data$Electrical.comments, verify_data$Engine.comments, verify_data$Exterior.comments,
+  verify_data$Gearbox.comments, verify_data$Interior.comments, verify_data$Undercarriage.comments, verify_data$Vehicle.history)
 
 names(test_data) = c(
   "Res.Price", "Reg.No.", 'AuctY',
@@ -75,145 +86,56 @@ names(test_data) = c(
   "Manf.Yr", "Mileage",
   "Elect.R", "Eng.R", "Ext.R",
   "Gearb.R", "Int.R", "UC.R",
-  "Struct.R", "Flood.R"
-)
+  "Struct.R", "Flood.R",
+  'Elec_rmk', 'Eng_rmk', 'Ext_rmk',
+  'Gear_rmk', 'Int_rmk', 'UC_rmk', 'VH_rmk')
 
 
-training_data$AuctY = factor(training_data$AuctY, ordered = TRUE, levels=c(2013, 2014, 2015, 2016, 2017, 2018))
-
-training_data$AuctM = factor(training_data$AuctM, ordered = TRUE, 
-                             levels=c("Jan","Feb","Mar", "Apr","May","Jun", "Jul","Aug","Sep", "Oct","Nov","Dec")
-                             )
-training_data$AuctQ = factor(training_data$AuctQ, ordered = TRUE, levels=c("Q1", "Q2", "Q3", "Q4"))
-
-training_data$Manf.Yr = as.numeric(levels(training_data$Manf.Yr))[training_data$Manf.Yr]
-training_data$Age = as.numeric(levels(training_data$Age))[training_data$Age]
-training_data = dplyr::filter(training_data, (Manf.Yr >= 2000) & !is.na(Manf.Yr))
-training_data$Manf.Yr = factor(training_data$Manf.Yr, ordered = TRUE, 
-                            levels=c(2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
-                                     2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018)
-                            )
-
-test_data = dplyr::filter(test_data, (Manf.Yr >= 2000) & !is.na(Manf.Yr))
-
-# Convert to factor / numericals depending on data structure
-
-# # # # # # # # # # # # # # # # # # 
-#
-# Errors likely to occur here!!
-#
-# # # # # # # # # # # # # # # # # # 
-
-training_data$Brand = as.factor(toupper(trimws(training_data$Brand)))
-
-plyr::count(training_data$Brand)
-
-# categorize Make_Popular into: "HOT", "COLD_PREMIUM", "COLD_NONPREMIUM"
-training_data$Make_Popular = as.factor(dplyr::case_when(
-                                    training_data$Brand %in% c("HONDA", "NISSAN", "TOYOTA", "PROTON", "PERODUA") ~ "HOT",
-                                    training_data$Brand %in% c("ALFA ROMEO", "BMW", "MERCEDES BENZ", "VOLVO", "PORSCHE", "ROVER", 
-                                                               "LAND ROVER", "MG ROVER", "MINI. UNITED KINGDOM", "AUDI", "JAGUAR", 
-                                                               "INFINITI","LEXUS") ~ "COLD_PREMIUM",
-                                    TRUE ~ "COLD_NONPREMIUM"))
-
-training_data$Model_Grp = as.factor(toupper(trimws(training_data$Model_Grp)))
-training_data$Variant = as.factor(toupper(trimws(training_data$Variant)))
-training_data$Auct.Stat = as.factor(toupper(trimws(training_data$Auct.Stat)))
-
-test_data$Brand = as.factor(toupper(trimws(test_data$Brand)))
-test_data$Make_Popular = as.factor(dplyr::case_when(
-  test_data$Brand %in% c("HONDA", "NISSAN", "TOYOTA", "PROTON", "PERODUA") ~ "HOT",
-  test_data$Brand %in% c("ALFA ROMEO", "BMW", "MERCEDES BENZ", "VOLVO", "PORSCHE", "ROVER", 
-                             "LAND ROVER", "MG ROVER", "MINI. UNITED KINGDOM", "AUDI", "JAGUAR", 
-                             "INFINITI","LEXUS") ~ "COLD_PREMIUM",
-  TRUE ~ "COLD_NONPREMIUM"))
-
-test_data$Model_Grp = as.factor(toupper(trimws(test_data$Model_Grp)))
-test_data$Variant = as.factor(toupper(trimws(test_data$Variant)))
-
-if(class(training_data$Res.Price) == 'factor'){ 
-  training_data$Res.Price = as.numeric(gsub(",", "", levels(training_data$Res.Price)))[training_data$Res.Price]
-} else{
-  training_data$Res.Price
-}
-
-if(class(training_data$Final.Price) == 'factor'){ 
-  training_data$Final.Price = as.numeric(gsub(",", "", levels(training_data$Final.Price)))[training_data$Final.Price]
-} else{
-  training_data$Final.Price
-}
-
-if(class(training_data$Mileage) == 'factor'){ 
-  training_data$Mileage = as.numeric(gsub(",", "", levels(training_data$Mileage)))[training_data$Mileage]
-} else{
-  training_data$Mileage
-}
-
-# Test data: convert factors to numerics
-if(class(test_data$Res.Price) == 'factor'){ 
-  test_data$Res.Price = as.numeric(gsub(",", "", levels(test_data$Res.Price)))[test_data$Res.Price]
-} else{
-  test_data$Res.Price
-}
-if(class(test_data$Mileage) == 'factor'){ 
-  test_data$Mileage = as.numeric(gsub(",", "", levels(test_data$Mileage)))[test_data$Mileage]
-} else{
-  test_data$Mileage
-}
-if(class(test_data$Price.Guide) == 'factor'){ 
-  test_data$Price.Guide = as.numeric(gsub(",", "", levels(test_data$Price.Guide)))[test_data$Price.Guide]
-} else{
-  test_data$Price.Guide
-}
-if(class(test_data$ERP) == 'factor'){ 
-  test_data$ERP = as.numeric(gsub(",", "", levels(test_data$ERP)))[test_data$ERP]
-} else{
-  test_data$ERP
-}
-
-# Clean Flood Rating: alot of NAs and 0
-training_data$Flood.R = as.character(training_data$Flood.R)
-training_data$Flood.R = ifelse(is.na(training_data$Flood.R), 0,
-                               ifelse(training_data$Flood.R == "", 0,
-                                      training_data$Flood.R)
-)
-training_data$Flood.R = as.factor(training_data$Flood.R)
-
-
-test_data$Flood.R = as.character(test_data$Flood.R)
-test_data$Flood.R = ifelse(is.na(test_data$Flood.R), 0,
-                               ifelse(test_data$Flood.R == "", 0,
-                                      test_data$Flood.R)
-)
-test_data$Flood.R = as.factor(test_data$Flood.R)
-
-training_data$Elec_rmk = as.character(training_data$Elec_rmk)
-training_data$Eng_rmk = as.character(training_data$Eng_rmk)
-training_data$Ext_rmk = as.character(training_data$Ext_rmk)
-training_data$Gear_rmk = as.character(training_data$Gear_rmk)
-training_data$Int_rmk = as.character(training_data$Int_rmk)
-training_data$UC_rmk = as.character(training_data$UC_rmk)
-training_data$VH_rmk = as.character(training_data$VH_rmk)
-
-training_data = droplevels(training_data)
-test_data = droplevels(test_data)
+# Filter for Sold units & Clean Data -----------------------------------------------------------
+#library(dplyr)
 
 dim(training_data)
-dim(test_data)
 
-# Filter data
+name_columns = c('Brand', 'Model_Grp', 'Variant', 'Veh Loc', 'Auct.Stat')
+training_data = training_data[complete.cases(training_data[name_columns]), ]
+
+
+training_data[name_columns] = sapply(training_data[name_columns], function(x) toupper(trimws(x)))
+training_data[name_columns] = lapply(training_data[name_columns], factor)
 
 training_data = dplyr::filter(training_data, Auct.Stat == "SOLD")
 
-# sapply(training_data, function(x) sum(is.na(x))) # check no. of NAs in each predictor
-sapply(test_data, function(x) sum(is.na(x))) # check no. of NAs in each predictor
+# categorize Make_Popular into: "HOT", "COLD_PREMIUM", "COLD_NONPREMIUM"
+training_data$Make_Popular = as.factor(
+  dplyr::case_when(
+    training_data$Brand %in% c("HONDA", "NISSAN", "TOYOTA", "PROTON", "PERODUA") ~ "HOT",
+    training_data$Brand %in% c("ALFA ROMEO", "BMW", "MERCEDES BENZ", "VOLVO", "PORSCHE", "ROVER", 
+                               "LAND ROVER", "MG ROVER", "MINI. UNITED KINGDOM", "AUDI", "JAGUAR", 
+                               "INFINITI","LEXUS") ~ "COLD_PREMIUM",
+    TRUE ~ "COLD_NONPREMIUM"))
 
-training_data = training_data[complete.cases(training_data), ]
-test_data = test_data[complete.cases(test_data[, -1]), ]
 
-# training_data = dplyr::filter(training_data, !is.na(Res.Price) & !is.na(Price.Guide) & 
-#                                !is.na(Age) & !is.na(ERP) & !is.na(Mileage))
 
+num_columns = c("Res.Price", "Final.Price", 'AuctY', 'Manf.Yr', 'Price.Guide', 'ERP', 'Mileage', 'CC')
+
+
+
+
+toNumFunction <- function (x) {
+ tryCatch({
+    if(class(x) == 'factor'){x = as.numeric(gsub(",", "", levels(x)))[x]} 
+    else {x}},
+  error = function(e){cat("ERROR :",conditionMessage(e), "\n")})
+}
+
+training_data[colnames(training_data) %in% num_columns] <- sapply(
+  training_data[colnames(training_data) %in% num_columns], toNumFunction)
+
+training_data = dplyr::filter(training_data, (Manf.Yr >= 2000) & !is.na(Manf.Yr))
+
+training_data$Date = as.Date(training_data$Date, format='%m/%d/%Y')
+
+training_data$Age = as.integer(format(Sys.Date(), "%Y")) - training_data$Manf.Yr
 training_data$Mileage_yr = training_data$Mileage / training_data$Age
 
 training_data = training_data %>% 
@@ -222,128 +144,187 @@ training_data = training_data %>%
       (Mileage_yr <= 30000) ~ "<= 30k/yr",
       (Mileage_yr > 30001 & Mileage_yr < 40000) ~ "30-40k/yr",
       (Mileage_yr > 40000) ~ ">40k/yr", 
-      TRUE ~ "N/A"
-    )
-  )
-)
+      TRUE ~ "N/A")))
 
+training_data = training_data[complete.cases(training_data[num_columns]), ]
+
+# create ordered categorical variables (for dates)
+
+training_data$AuctY = factor(training_data$AuctY, 
+                             ordered = TRUE, levels=c(2013, 2014, 2015, 2016, 2017, 2018))
+
+training_data$AuctM = factor(training_data$AuctM, 
+                             ordered = TRUE, 
+                             levels=c("Jan","Feb","Mar", "Apr","May","Jun", 
+                                      "Jul","Aug","Sep", "Oct","Nov","Dec"))
+
+training_data$AuctQ = factor(training_data$AuctQ, 
+                             ordered = TRUE, 
+                             levels=c("Q1", "Q2", "Q3", "Q4"))
+
+
+training_data$Manf.Yr = factor(training_data$Manf.Yr, 
+                               ordered = TRUE, 
+                               levels=c(2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
+                                        2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018))
+
+
+
+training_data = droplevels(training_data)
+dim(training_data)
+
+# Clean for test data & align factor levels -------------------------------
+
+sapply(test_data, function(x) sum(is.na(x))) # check no. of NAs in each predictor
+# test_data = test_data[complete.cases(test_data[, -1]), ] # filter for NAs except for reserve price col.
+
+
+test_data[colnames(test_data) %in% name_columns] = sapply(
+  test_data[colnames(test_data) %in% name_columns], function(x) toupper(trimws(x)))
+
+test_data$Brand = factor(test_data$Brand, levels =  levels(training_data$Brand))
+test_data$Model_Grp = factor(test_data$Model_Grp, levels =  levels(training_data$Model_Grp))
+test_data$Variant = factor(test_data$Variant, levels =  levels(training_data$Variant))
+
+# for (j in name_toupper){
+#   print(j)
+#   tryCatch({
+#     training_data[, paste0(j)] = as.factor(toupper(trimws(training_data[, paste0(j)])))
+#     test_data[, paste0(j)] = as.factor(toupper(trimws(test_data[, paste0(j)])))},
+#   error = function(e){cat("ERROR :",conditionMessage(e), "\n")})}
+# check if can work for unavail columns for test data
+
+
+test_data[colnames(test_data) %in% num_columns] <- sapply(
+  test_data[colnames(test_data) %in% num_columns], toNumFunction)
+
+## Alternate method using for loop
+# for (j in numerical_columns){
+#   print(j)
+#   tryCatch({
+#     if(class(test_data[, paste0(j)]) == 'factor'){
+#       test_data[, paste0(j)] = as.numeric(
+#         gsub(",", "", levels(test_data[, paste0(j)])))[test_data[, paste0(j)]]} 
+#     else{NULL}}, 
+#   error = function(e){cat("ERROR :",conditionMessage(e), "\n")})}
+
+test_data$AuctY = factor(test_data$AuctY, levels = levels(training_data$AuctY), ordered = TRUE)
 test_data$Age = as.integer(format(Sys.Date(), "%Y")) - test_data$Manf.Yr
 test_data$Mileage_yr = test_data$Mileage / test_data$Age
 
 test_data = test_data %>% 
-  dplyr::mutate(Mileage_yr_Grp = factor(
-    dplyr::case_when(
-      (Mileage_yr <= 30000) ~ "<= 30k/yr",
-      (Mileage_yr > 30001 & Mileage_yr < 40000) ~ "30-40k/yr",
-      (Mileage_yr > 40000) ~ ">40k/yr",
-      TRUE ~ "N/A"
-    )
-  )
-)
+  dplyr::mutate(Mileage_yr_Grp = dplyr::case_when(
+    (Mileage_yr <= 30000) ~ "<= 30k/yr",
+    (Mileage_yr > 30001 & Mileage_yr < 40000) ~ "30-40k/yr",
+    (Mileage_yr > 40000) ~ ">40k/yr",
+    TRUE ~ "N/A"))
+test_data$Mileage_yr_Grp = factor(test_data$Mileage_yr_Grp, levels = levels(training_data$Mileage_yr_Grp))
+
+test_data$Make_Popular = dplyr::case_when(
+  test_data$Brand %in% c("HONDA", "NISSAN", "TOYOTA", "PROTON", "PERODUA") ~ "HOT",
+  test_data$Brand %in% c("ALFA ROMEO", "BMW", "MERCEDES BENZ", "VOLVO", "PORSCHE", "ROVER", 
+                         "LAND ROVER", "MG ROVER", "MINI. UNITED KINGDOM", "AUDI", "JAGUAR", 
+                         "INFINITI","LEXUS") ~ "COLD_PREMIUM",
+  TRUE ~ "COLD_NONPREMIUM")
+test_data$Make_Popular = factor(test_data$Make_Popular, levels = levels(training_data$Make_Popular))
+
+
+# Clean & Filter vehicle condition rating (potentially removed in future)  --------
+
+
+condition_rating = colnames(training_data)[grep('\\.[R]', colnames(training_data))]
+
+training_data[condition_rating] = sapply(training_data[condition_rating], function(x) as.character(x))
+test_data[condition_rating] = sapply(test_data[condition_rating], function(x) as.character(x))
+
+# for (j in condition_rating){ # convert veh ratings to character
+#   print(j)
+#   training_data[, paste0(j)] = as.character(training_data[, paste0(j)])
+#   test_data[, paste0(j)] = as.character(test_data[, paste0(j)])}
+
+training_data = dplyr::filter(training_data,
+  !is.na(Variant) &
+  !(Elect.R %in% c(0, "", "N")) & !(Eng.R %in% c(0, "", "N")) & !(Ext.R %in% c(0, "","N")) & 
+  !(Gearb.R %in% c(0, "", "N")) & !(Int.R %in% c(0, "", "N")) & !(UC.R %in% c(0, "", "N")) &
+  !(Struct.R %in% c(0, "", "N")))
+
+cat_ABFun <- function (x) {
+  if_else(condition = x %in% c("A", "B"), true = "A/B", false = x)}
+      
+cat_columns = condition_rating[!(condition_rating %in% c('Flood.R'))]
+
+# PF2 ---------------------------------------------------------------------
+
+
+training_data[cat_columns] <- sapply(training_data[cat_columns], cat_ABFun)
+training_data[cat_columns] <- lapply(
+  training_data[cat_columns], function (x) {factor(x, levels = c("A/B", 'C','D','E'))})
+
+test_data[cat_columns] <- sapply(test_data[cat_columns], cat_ABFun)
+test_data[cat_columns] <- lapply(
+  test_data[cat_columns], function (x) {factor(x, levels = c("A/B", 'C','D','E'))})
+str(training_data)
+
+# for (j in condition_rating[condition_rating != c("Flood.R")]){ # categorize A & B into A/B
+#   print(j)
+#   training_data[ , paste0(j)][training_data[, paste0(j)] %in% c("A", "B")] = "A/B"
+#   training_data[ , paste0(j)] = as.factor(training_data[ , paste0(j)])
+#   test_data[ , paste0(j)][test_data[, paste0(j)] %in% c("A", "B")] = "A/B"
+#   test_data[ , paste0(j)] = as.factor(test_data[ , paste0(j)])}
+
+# Clean Flood Rating: alot of NAs and 0
+training_data$Flood.R = ifelse(is.na(training_data$Flood.R), 0,
+                               ifelse(training_data$Flood.R == "", 0,
+                                      training_data$Flood.R))
+training_data$Flood.R = as.factor(training_data$Flood.R)
+
+test_data$Flood.R = ifelse(is.na(test_data$Flood.R), 0,
+                               ifelse(test_data$Flood.R == "", 0,
+                                      test_data$Flood.R))
+test_data$Flood.R = as.factor(test_data$Flood.R)
+
+# Note: 
+# consider ordered vehicle conditions
+
+
+# clean vehicle condition comments
+
+condition_comments = colnames(training_data)[grep('\\_[rmk]', colnames(training_data))]
+
+for (j in condition_comments){ # convert veh comments to character
+  print(j)
+  training_data[, paste0(j)] = as.character(training_data[, paste0(j)])
+  test_data[, paste0(j)] = as.character(test_data[, paste0(j)])}
+
 
 dim(training_data)
 dim(test_data)
 
-# # # # # # # # # # # # # # # # # # # # # # # 
-# # # # consider ordered veh condition # # # #
-# # # # # # # # # # # # # # # # # # # # # # # 
+str(training_data)
+str(test_data)
 
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# # # # # Merge certain conditions in insp. report Phase 3 # # # # 
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# Visualize Predictors -----------------------------------------------------
 
-training_data$Elect.R = as.character(training_data$Elect.R)
-unique(training_data$Elect.R)
-training_data$Elect.R[training_data$Elect.R %in% c("A", "B")] = "A/B"
-training_data$Elect.R = as.factor(training_data$Elect.R)
-levels(training_data$Elect.R)
+library(GGally)
 
-training_data$Eng.R = as.character(training_data$Eng.R)
-unique(training_data$Eng.R)
-training_data$Eng.R[training_data$Eng.R %in% c("A", "B")] = "A/B"
-training_data$Eng.R = as.factor(training_data$Eng.R)
-plyr::count(training_data$Eng.R)
+pred_vis = colnames(training_data)[(colnames(training_data) %in% 
+  c('Res.Price', 'Final.Price', 'Brand', 'Model_Grp'))]
 
-training_data$Ext.R = as.character(training_data$Ext.R)
-unique(training_data$Ext.R)
-training_data$Ext.R[training_data$Ext.R %in% c("A", "B")] = "A/B"
-training_data$Ext.R = as.factor(training_data$Ext.R)
-plyr::count(training_data$Ext.R)
-table(train_p2$Ext.R, train_p2$Variant)
 
-training_data$Gearb.R = as.character(training_data$Gearb.R)
-unique(training_data$Gearb.R)
-training_data$Gearb.R[training_data$Gearb.R %in% c("A", "B")] = "A/B"
-training_data$Gearb.R = as.factor(training_data$Gearb.R)
-levels(training_data$Gearb.R)
 
-training_data$Int.R = as.character(training_data$Int.R)
-unique(training_data$Int.R)
-training_data$Int.R[training_data$Int.R %in% c("A", "B")] = "A/B"
-training_data$Int.R = as.factor(training_data$Int.R)
-levels(training_data$Int.R)
+ggpairs(training_data[, paste0(pred_vis)], 
+  cardinality_threshold = 500) # consider simplifying the categories
 
-training_data$UC.R = as.character(training_data$UC.R)
-unique(training_data$UC.R)
-training_data$UC.R[training_data$UC.R %in% c("A", "B")] = "A/B"
-training_data$UC.R = as.factor(training_data$UC.R)
-levels(training_data$UC.R)
 
-training_data$Struct.R = as.character(training_data$Struct.R)
-unique(training_data$Struct.R)
-training_data$Struct.R[training_data$Struct.R %in% c("A", "B")] = "A/B"
-training_data$Struct.R = as.factor(training_data$Struct.R)
-levels(training_data$Struct.R)
+str(training_data)
 
-# # # # # # # # # # # # # # # # # # # # # # # # # # # 
-# # # # # # # # # Merge for Test Set # # # # # # # # 
-# # # # # # # # # # # # # # # # # # # # # # # # # # #
+# training_data %>% group_by(Brand) %>%
+#   summarise(n = n()) %>%
+#   arrange(desc(n))
 
-test_data$Elect.R = as.character(test_data$Elect.R)
-unique(test_data$Elect.R)
-test_data$Elect.R[test_data$Elect.R %in% c("A", "B")] = "A/B"
-test_data$Elect.R = as.factor(test_data$Elect.R)
-levels(test_data$Elect.R)
 
-test_data$Eng.R = as.character(test_data$Eng.R)
-unique(test_data$Eng.R)
-test_data$Eng.R[test_data$Eng.R %in% c("A", "B")] = "A/B"
-test_data$Eng.R = as.factor(test_data$Eng.R)
-plyr::count(test_data$Eng.R)
+# Scaling -----------------------------------------------------------------
 
-test_data$Ext.R = as.character(test_data$Ext.R)
-unique(test_data$Ext.R)
-test_data$Ext.R[test_data$Ext.R %in% c("A", "B")] = "A/B"
-test_data$Ext.R = as.factor(test_data$Ext.R)
-plyr::count(test_data$Ext.R)
-table(train_p2$Ext.R, train_p2$Variant)
-
-test_data$Gearb.R = as.character(test_data$Gearb.R)
-unique(test_data$Gearb.R)
-test_data$Gearb.R[test_data$Gearb.R %in% c("A", "B")] = "A/B"
-test_data$Gearb.R = as.factor(test_data$Gearb.R)
-levels(test_data$Gearb.R)
-
-test_data$Int.R = as.character(test_data$Int.R)
-unique(test_data$Int.R)
-test_data$Int.R[test_data$Int.R %in% c("A", "B")] = "A/B"
-test_data$Int.R = as.factor(test_data$Int.R)
-levels(test_data$Int.R)
-
-test_data$UC.R = as.character(test_data$UC.R)
-unique(test_data$UC.R)
-test_data$UC.R[test_data$UC.R %in% c("A", "B")] = "A/B"
-test_data$UC.R = as.factor(test_data$UC.R)
-levels(test_data$UC.R)
-
-test_data$Struct.R = as.character(test_data$Struct.R)
-unique(test_data$Struct.R)
-test_data$Struct.R[test_data$Struct.R %in% c("A", "B")] = "A/B"
-test_data$Struct.R = as.factor(test_data$Struct.R)
-levels(test_data$Struct.R)
-
-dim(training_data)
-dim(test_data)
 
 # # # # # # # # # # # # # # # #
 # # # # #  Scaling TBD # # # # # 
@@ -355,45 +336,54 @@ dim(test_data)
 
 # library(quanteda)
 quanteda_options("threads" = 4)
-corpus_elec = corpus(as.character(training_data$Elec_rmk)) # creates corpus
-corpus_eng = corpus(as.character(training_data$Eng_rmk))
-corpus_ext = corpus(as.character(training_data$Ext_rmk))
-corpus_gear = corpus(as.character(training_data$Gear_rmk))
-corpus_int = corpus(as.character(training_data$Int_rmk))
-corpus_uc = corpus(as.character(training_data$UC_rmk))
-corpus_vh = corpus(as.character(training_data$VH_rmk))
 
+condition_comments
+
+for (j in condition_comments){ # create corpus
+  print(j)
+  assign(paste0('corpus', j, 'train'), corpus(as.character(training_data[, paste0(j)])))
+  assign(paste0('corpus', j, 'test'), corpus(as.character(test_data[, paste0(j)])))}
+
+for (j in condition_comments){ # create doc feature matrix
+  print(j)
+  assign(paste0('dfm', j, 'train'), dfm(get(paste0('corpus', j, 'train')), 
+    ngrams = 1, remove = stopwords("english"), remove_punct = TRUE, remove_numbers = TRUE, stem = FALSE))
+  
+  assign(paste0('dfm', j, 'test'), dfm(get(paste0('corpus', j, 'test')), 
+    ngrams = 1, remove = stopwords("english"), remove_punct = TRUE, remove_numbers = TRUE, stem = FALSE))}
+
+
+dfm
 # summary(corpus1)
 # kwic(corpus1, 'faulty') # key words in corpus
+j = 'Elec_rmk'
+corpusElec_rmktrain
+get(paste0('corpus', j, 'train'))
+topfeatures(dfm(get(paste0('corpus', j, 'train')), 
+    ngrams = 1, remove = stopwords("english"), remove_punct = TRUE, remove_numbers = TRUE, stem = FALSE),
+    n = 10, decreasing =TRUE
+)
 
-dfm_elec <- dfm( # creates document feature matrix
-  corpus_elec, ngrams = 1,
-  remove = stopwords("english"), remove_punct = TRUE, remove_numbers = TRUE, stem = FALSE
-)
-dfm_eng <- dfm(
-  corpus_eng, ngrams = 1,
-  remove = stopwords("english"), remove_punct = TRUE, remove_numbers = TRUE, stem = FALSE
-)
-dfm_ext <- dfm(
-  corpus_ext, ngrams = 1,
-  remove = stopwords("english"), remove_punct = TRUE, remove_numbers = TRUE, stem = FALSE
-)
-dfm_gear <- dfm(
-  corpus_gear, ngrams = 1,
-  remove = stopwords("english"), remove_punct = TRUE, remove_numbers = TRUE, stem = FALSE
-)
-dfm_int <- dfm(
-  corpus_int, ngrams = 1,
-  remove = stopwords("english"), remove_punct = TRUE, remove_numbers = TRUE, stem = FALSE
-)
-dfm_uc <- dfm(
-  corpus_uc, ngrams = 1,
-  remove = stopwords("english"), remove_punct = TRUE, remove_numbers = TRUE, stem = FALSE
-)
-dfm_vh <- dfm(
-  corpus_vh, ngrams = 1,
-  remove = stopwords("english"), remove_punct = TRUE, remove_numbers = TRUE, stem = FALSE
-)
+paste0('corpus', j, 'train')
+
+# TBC ---------------------------------------------------------------------
+
+# do one hot encoding on top 10 features (initial top 10 features concatenated, later try do each 10)
+keywords = names(topfeatures(dfmElec_rmktrain, n = 10, decreasing=TRUE))
+# library(stringr)
+
+for (j in condition_comments){ # 1 hot encoding for all keywords under major category
+  print(j)
+  keywords <- names(topfeatures(get(paste0('dfm', j, 'train')), n = 10, decreasing=TRUE))
+  keywords <- keywords[nchar(keywords) >= 3]
+  training_data[paste0(j, 'Bin')] <- lapply(
+    training_data[paste0(j)], function (x) (str_detect(x, paste(keywords, collapse = '|')))*1)
+  }
+
+
+
+# debug -------------------------------------------------------------------
+
 
 tf_elec <- topfeatures(dfm_elec, n = 10, decreasing=TRUE)
 tf_eng <- topfeatures(dfm_eng, n = 10, decreasing=TRUE)
@@ -411,7 +401,7 @@ tf_int
 tf_uc
 tf_vh
 
-library(stringr)
+
 
 # one-hot encoding into variables?
 keywords = c('faulty', 'malfunct')
@@ -618,9 +608,9 @@ dim(df_split_valid)
 dim(df_split_test)
 
 
-# h2o AUTOML: Japan-Top3 + National --------------------------------------------------------------
 
-# Finally, let's load H2O and start up an H2O cluster
+# Init files for h2o ------------------------------------------------------
+
 library(h2o)
 h2o.init(min_mem_size="4g", max_mem_size = "8g")
 h2o.shutdown()
@@ -637,10 +627,14 @@ y <- 'Final.Price'
 # y <- 'Res.Price'
 x <- setdiff(names(df_h2o_train), y)
 
-splits <- h2o.splitFrame(df_h2o_train, ratios = c(0.7, .15) , seed = 1)
+# splits <- h2o.splitFrame(df_h2o_train, ratios = c(0.7, .15) , seed = 1)
 # train <- splits[[1]]
 # valid <- splits[[2]]
 # test <- splits[[3]]
+
+# h2o AUTOML: Japan-Top3 + National --------------------------------------------------------------
+
+
 
 aml_selected <- h2o.automl(x = x, # note filter for Jap-Top 3 & National
                      y = y,
@@ -685,9 +679,12 @@ aml_all <- h2o.automl(x = x, # note incl all variants
 h2o.rmse(aml_all@leader, valid=TRUE) # 2,291 (training error), valid error 2.4k
 
 
-# model_path <- h2o.saveModel(object = h2o.getModel(aml_selected@leader@model_id), path = getwd(), force = TRUE)
-# h2o_best_model <- h2o.loadModel(model_path)
+# Make predictions for h2o model --------------------------------------------------------
 
+
+# model_path <- h2o.saveModel(object = h2o.getModel(aml_selected@leader@model_id), path = getwd(), force = TRUE)
+h2o_best_model <- h2o.loadModel(model_path)
+h2o_best_model
 
 # analyze results by model group, shud compare valid/test set only
 
@@ -704,7 +701,6 @@ pred_selected_full_model = as.vector(h2o.predict(aml_all, df_h2o_train))
 
 sqrt(mean((pred_selected_full_model-df_train[,1])^2)) # 2,291 (full model, Jap-Top3 & National dataset)
 sqrt(mean((pred_full_h2o-df_train[, 1])^2)) # 1,330 (Jap-Top3 & National)
-
 
 df_train_est_h2o %>%
   dplyr::group_by(Model_Grp) %>%
