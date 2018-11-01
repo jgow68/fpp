@@ -12,9 +12,7 @@
 # data = read.csv("ConsolAD_Jun18.csv")
 # data = read.csv('ConsolAD_Jul18.csv', encoding = 'UTF-8')
 data = read.csv('ConsolAD_17Oct_2018.csv', encoding = 'UTF-8')
-verify_data = read.csv("DisposalTemplate.csv")
-
-
+verify_data = read.csv("DisposalTemplate_31Oct.csv")
 
 # Load libraries ----------------------------------------------------------
 
@@ -86,7 +84,7 @@ test_data = cbind.data.frame(
   verify_data$Gearbox, verify_data$Interior, verify_data$Undercarriage,
   verify_data$Structure, verify_data$Flooded.Rating,
   verify_data$Electrical.comments, verify_data$Engine.comments, verify_data$Exterior.comments,
-  verify_data$Gearbox.comments, verify_data$Interior.comments, verify_data$Undercarriage.comments, verify_data$Vehicle.history)
+  verify_data$Gearbox.comments, verify_data$Interior.comments, verify_data$Undercarriage.comments, verify_data$vehicle.history)
 
 names(test_data) = c(
   "Res.Price", "Reg.No.", 'AuctY',
@@ -218,6 +216,7 @@ test_data[colnames(test_data) %in% num_columns] <- sapply(
 #   error = function(e){cat("ERROR :",conditionMessage(e), "\n")})}
 
 test_data$AuctY = factor(test_data$AuctY, levels = levels(training_data$AuctY), ordered = TRUE)
+
 test_data$Age = as.integer(format(Sys.Date(), "%Y")) - test_data$Manf.Yr
 test_data$Auct.Freq = test_data$Auct.Freq + 1 # note template auction freq is before listing
 test_data$Mileage_yr = test_data$Mileage / test_data$Age
@@ -239,6 +238,7 @@ test_data$Make_Popular = dplyr::case_when(
   TRUE ~ "COLD_NONPREMIUM")
 test_data$Make_Popular = factor(test_data$Make_Popular, levels = levels(training_data$Make_Popular))
 
+test_data$Manf.Yr = factor(test_data$Manf.Yr, levels = levels(training_data$Manf.Yr), ordered = TRUE)
 
 # Clean & Filter vehicle condition rating (potentially removed in future)  --------
 
@@ -263,8 +263,6 @@ cat_ABFun <- function (x) {
   if_else(condition = x %in% c("A", "B"), true = "A/B", false = x)}
       
 cat_columns = condition_rating[!(condition_rating %in% c('Flood.R'))]
-
-
 
 training_data[cat_columns] <- sapply(training_data[cat_columns], cat_ABFun)
 training_data[cat_columns] <- lapply(
@@ -360,6 +358,181 @@ for (j in condition_comments){ # 1 hot encoding for all keywords under major cat
 
 # undersampling technique: custer, toek links
 
+
+# Scaling -----------------------------------------------------------------
+
+# scale PG, ERP & Auct.Freq
+scaled_col = c('Price.Guide', 'ERP', 'Auct.Freq')
+
+scaled_data = scale(training_data[, scaled_col])
+
+training_data[, scaled_col] = scaled_data
+# center_ref = attr(scaled_data, 'scaled:center')
+# scaled_ref = attr(scaled_data, 'scaled:scale')
+test_data[, scaled_col] = scale(test_data[, scaled_col], 
+  center = attr(scaled_data, 'scaled:center'), scale = attr(scaled_data, 'scaled:scale'))
+
+# library("scales"), function rescale()
+
+# Prep files for h2o AutoML ----------------------------------------------------------
+
+drops = c('Res.Price', 'Date', "AuctM", "AuctQ", 'Reg.No',
+          "Live Auct/X-Chg", "Mileage", 'Age', "Auct.Stat", "Veh Loc", 'CC',
+          'Elect.R', 'Eng.R', 'Ext.R', 'Gearb.R', 'Int.R', 'UC.R', 
+          'Elec_rmk', 'Eng_rmk', 'Ext_rmk', 'Gear_rmk', 'Int_rmk', 'UC_rmk',
+          "Mileage_yr", "VH_rmk", "Make_Popular") # drop Make_Popular when filtered Jap-Top3 & Natl
+
+df_train = training_data[, !names(training_data) %in% drops]
+df_test = test_data[, !names(test_data) %in% drops]
+
+dim(df_train)
+dim(df_test)
+
+paste(sum(names(df_train) == names(df_test)), "columns matched out of", dim(df_train)[2], sep = " ")
+
+
+# h2o can't process ordered factors
+ordered_factors = c('AuctY', 'Manf.Yr', 'Mileage_yr_Grp')
+for (j in ordered_factors){
+  print(j)
+  df_train[, paste0(j)] <- factor(df_train[, paste0(j)], ordered = FALSE)
+  df_test[, paste0(j)] <- factor(df_test[, paste0(j)], ordered = FALSE, levels = levels(df_train[, paste0(j)]))
+}
+
+str(df_train)
+str(df_test)
+
+# Split data for train, valid, test ---------------------------------------
+
+# library(caret)
+set.seed(123)
+trainIndex <- createDataPartition(df_train$Final.Price, p = .7, 
+                                  list = FALSE, 
+                                  times = 1)
+
+df_split_train = df_train[trainIndex, ]
+df_split_nonTrain = df_train[-trainIndex, ]
+
+validIndex <- createDataPartition(df_split_nonTrain$Final.Price, p = .5, 
+                                  list = FALSE, 
+                                  times = 1)
+
+df_split_valid = df_split_nonTrain[validIndex, ]
+df_split_test = df_split_nonTrain[-validIndex, ]
+
+dim(df_split_train)
+dim(df_split_valid)
+dim(df_split_test)
+dim(df_test)
+
+# Init files for h2o ------------------------------------------------------
+
+# library(h2o)
+h2o.init(min_mem_size="4g", max_mem_size = "8g")
+h2o.shutdown()
+
+df_h2o_train <- as.h2o(df_split_train)
+df_h2o_valid <- as.h2o(df_split_valid)
+df_h2o_test <- as.h2o(df_split_test)
+df_pred <- as.h2o(df_test)
+
+# h2o.describe(df_h2o_train)
+# h2o.describe(df_h2o_test)
+
+y <- 'Final.Price'
+# y <- 'Res.Price'
+x <- setdiff(names(df_h2o_train), y)
+
+# x <- x[!(x %in% c('Price.Guide'))] # remove and observe price guide impact
+
+# splits <- h2o.splitFrame(df_h2o_train, ratios = c(0.7, .15) , seed = 1)
+# train <- splits[[1]]
+# valid <- splits[[2]]
+# test <- splits[[3]]
+# h2o AUTOML: training model for final price prediction --------------------------------------------------------------
+
+# aml_selected <- h2o.automl(x = x,
+#   y = y,
+#   training_frame = df_h2o_train,
+#   nfolds = 5,
+#   keep_cross_validation_predictions = TRUE,
+#   validation_frame = df_h2o_valid,
+#   leaderboard_frame = df_h2o_test,
+#   # exclude_algos = c("GLM", "DeepLearning", "GBM", DRF", "StackedEnsemble"),
+#   max_runtime_secs = 60, # max_models
+#   seed = 1,
+#   project_name = "selected_final_price")
+
+# h2o.removeAll() # reset settings NOT WORKING
+
+# print(aml_selected@leaderboard)
+# h2o.rmse(aml_selected@leader, valid = TRUE)
+# aml_selected@leader@parameters
+# model_path <- h2o.saveModel(object = h2o.getModel(aml_selected@leader@model_id), path = getwd(), force = TRUE)
+h2o_best_model <- h2o.loadModel(model_path)
+
+
+# all models, without rating except for structural & flood, + remarks of major ctg
+# 1 min, gbm, valid error 2.5k
+# 10 mins, gbm, valid error 2.3k
+
+# (Jap-Top3 & Natl, filtered model)
+# 1 min, gbm model validation error: 2.3k 
+# 10 mins, stacked ensemble, validation error 2.26k
+# 1 hr, stacked ensemble, validation error 2.22k
+
+# validation error: 2.2k (Jap-Top3 & Natl, filtered model)
+
+# Note all previous metrics are training errors
+# ~2k with Make_Popular tag, 1,177 after removed
+# training RMSE: 859 (added vehicle history); 859 (with condition remarks & Brand); 965
+
+# aml_all <- h2o.automl(x = x, # note incl all variants
+#                       y = y,
+#                       training_frame = train,
+#                       nfolds = 5,
+#                       keep_cross_validation_predictions = TRUE,
+#                       validation_frame = valid,
+#                       leaderboard_frame = test,
+#                       # exclude_algos = c("GLM", "DeepLearning", "GBM", DRF", "StackedEnsemble"),
+#                       max_runtime_secs = 600, # max_models
+#                       seed = 1,
+#                       project_name = "final_price_all"
+# )
+# 
+# h2o.rmse(aml_all@leader, valid=TRUE) # 2,291 (training error), valid error 2.4k
+
+
+# Make predictions for upcoming listings --------------------------------------------------------
+
+# predict prices of upcoming auction
+pred_automl <- h2o.predict(h2o_best_model, df_pred[, -1])
+pred_prices = as.vector(pred_automl)
+
+# output in table format
+output_tbl = cbind.data.frame(
+  'Model' = as.character(df_test$Model_Grp),
+  'Variant' = as.character(df_test$Variant),
+  'Yr Make' = as.character(df_test$Manf.Yr),
+  'Reg. No.' = as.character(df_test$Reg.No.),
+  #'Actual Res. Price' = df_test$Res.Price, 
+  'Est Final Price' = pred_prices
+)
+
+write.csv(output_tbl, file = 'pred_prices.csv')
+
+# i <- sapply(df_test, is.factor) # convert factor cols to characters
+# df_output = test_data
+# df_output[i] <- lapply(df_output[i], as.character)
+
+
+
+# Next Steps: improvements
+
+# more specific indicators for vehicle conditions
+# handle sparse data
+# convert remaining factors to numericals? i.e. 
+
 # Text Feature Eng Ref ----------------------------------------------------
 
 
@@ -416,182 +589,6 @@ for (j in condition_comments){ # 1 hot encoding for all keywords under major cat
 # train2 = subset(train, price > 2.833)
 
 
-
-# Scaling -----------------------------------------------------------------
-
-# scale PG, ERP & Auct.Freq
-scaled_col = c('Price.Guide', 'ERP', 'Auct.Freq')
-
-scaled_data = scale(training_data[, scaled_col])
-
-training_data[, scaled_col] = scaled_data
-center_ref = attr(scaled_data, 'scaled:center')
-scaled_ref = attr(scaled_data, 'scaled:scale')
-test_data[, scaled_col] = scale(test_data[, scaled_col], 
-  center = attr(test, 'scaled:center'), scale = attr(test, 'scaled:scale'))
-
-# library("scales"), function rescale()
-
-# Prep files for h2o AutoML ----------------------------------------------------------
-
-drops = c('Res.Price', 'Date', "AuctM", "AuctQ", 'Reg.No',
-          "Live Auct/X-Chg", "Mileage", 'Age', "Auct.Stat", "Veh Loc", 'CC',
-          'Elect.R', 'Eng.R', 'Ext.R', 'Gearb.R', 'Int.R', 'UC.R', 
-          'Elec_rmk', 'Eng_rmk', 'Ext_rmk', 'Gear_rmk', 'Int_rmk', 'UC_rmk',
-          "Mileage_yr", "VH_rmk", "Make_Popular") # drop Make_Popular when filtered Jap-Top3 & Natl
-
-df_train = training_data[, !names(training_data) %in% drops]
-df_test = test_data[, !names(test_data) %in% drops]
-
-dim(df_train)
-dim(df_test)
-
-paste(sum(names(df_train) == names(df_test)), "columns matched out of", dim(df_train)[2], sep = " ")
-
-
-# h2o can't process ordered factors
-ordered_factors = c('AuctY', 'Manf.Yr', 'Mileage_yr_Grp')
-for (j in ordered_factors){
-  print(j)
-  df_train[, paste0(j)] <- factor(df_train[, paste0(j)], ordered = FALSE)
-  df_test[, paste0(j)] <- factor(df_test[, paste0(j)], ordered = FALSE, levels = levels(df_train[, paste0(j)]))
-}
-
-str(df_train)
-str(df_test)
-
-# Split data for train, valid, test ---------------------------------------
-
-# library(caret)
-set.seed(123)
-trainIndex <- createDataPartition(df_train$Final.Price, p = .7, 
-                                  list = FALSE, 
-                                  times = 1)
-
-df_split_train = df_train[trainIndex, ]
-df_split_nonTrain = df_train[-trainIndex, ]
-
-validIndex <- createDataPartition(df_split_nonTrain$Final.Price, p = .5, 
-                                  list = FALSE, 
-                                  times = 1)
-
-df_split_valid = df_split_nonTrain[validIndex, ]
-df_split_test = df_split_nonTrain[-validIndex, ]
-
-dim(df_split_train)
-dim(df_split_valid)
-dim(df_split_test)
-dim(df_pred)
-
-# Init files for h2o ------------------------------------------------------
-
-# library(h2o)
-h2o.init(min_mem_size="4g", max_mem_size = "8g")
-h2o.shutdown()
-
-df_h2o_train <- as.h2o(df_split_train)
-df_h2o_valid <- as.h2o(df_split_valid)
-df_h2o_test <- as.h2o(df_split_test)
-df_pred <- as.h2o(df_test)
-
-# h2o.describe(df_h2o_train)
-# h2o.describe(df_h2o_test)
-
-y <- 'Final.Price'
-# y <- 'Res.Price'
-x <- setdiff(names(df_h2o_train), y)
-
-# x <- x[!(x %in% c('Price.Guide'))] # remove and observe price guide impact
-
-# splits <- h2o.splitFrame(df_h2o_train, ratios = c(0.7, .15) , seed = 1)
-# train <- splits[[1]]
-# valid <- splits[[2]]
-# test <- splits[[3]]
-# h2o AUTOML: training model for final price prediction --------------------------------------------------------------
-
-aml_selected <- h2o.automl(x = x,
-                     y = y,
-                     training_frame = df_h2o_train,
-                     nfolds = 5,
-                     keep_cross_validation_predictions = TRUE,
-                     validation_frame = df_h2o_valid,
-                     leaderboard_frame = df_h2o_test,
-                     # exclude_algos = c("GLM", "DeepLearning", "GBM", DRF", "StackedEnsemble"),
-                     max_runtime_secs = 600, # max_models
-                     seed = 1,
-                     project_name = "selected_final_price"
-)
-
-# h2o.removeAll() # reset settings NOT WORKING
-
-print(aml_selected@leaderboard)
-h2o.rmse(aml_selected@leader, valid = TRUE)
-aml_selected@leader@parameters
-# model_path <- h2o.saveModel(object = h2o.getModel(aml_selected@leader@model_id), path = getwd(), force = TRUE)
-# h2o_best_model <- h2o.loadModel(model_path)
-
-
-# all models, without rating except for structural & flood, + remarks of major ctg
-# 1 min, gbm, valid error 2.5k
-# 10 mins, gbm, valid error 2.3k
-
-# (Jap-Top3 & Natl, filtered model)
-# 1 min, gbm model validation error: 2.3k 
-# 10 mins, stacked ensemble, validation error 2.26k
-# 1 hr, stacked ensemble, validation error 2.22k
-
-# validation error: 2.2k (Jap-Top3 & Natl, filtered model)
-
-# Note all previous metrics are training errors
-# ~2k with Make_Popular tag, 1,177 after removed
-# training RMSE: 859 (added vehicle history); 859 (with condition remarks & Brand); 965
-
-# aml_all <- h2o.automl(x = x, # note incl all variants
-#                       y = y,
-#                       training_frame = train,
-#                       nfolds = 5,
-#                       keep_cross_validation_predictions = TRUE,
-#                       validation_frame = valid,
-#                       leaderboard_frame = test,
-#                       # exclude_algos = c("GLM", "DeepLearning", "GBM", DRF", "StackedEnsemble"),
-#                       max_runtime_secs = 600, # max_models
-#                       seed = 1,
-#                       project_name = "final_price_all"
-# )
-# 
-# h2o.rmse(aml_all@leader, valid=TRUE) # 2,291 (training error), valid error 2.4k
-
-
-
-# Make predictions for upcoming listings --------------------------------------------------------
-
-# predict prices of upcoming auction
-pred_automl <- h2o.predict(h2o_best_model, df_pred)
-pred_prices = as.vector(pred_automl)
-
-# output in table format
-output_tbl = cbind.data.frame(
-  'Model' = as.character(df_test$Model_Grp),
-  'Variant' = as.character(df_test$Variant),
-  'Yr Make' = as.character(df_test$Manf.Yr),
-  'Reg. No.' = as.character(df_test$Reg.No.),
-  #'Actual Res. Price' = df_test$Res.Price, 
-  'Est Final Price' = pred_prices
-)
-
-write.csv(output_tbl, file = 'pred_prices.csv')
-
-# i <- sapply(df_test, is.factor) # convert factor cols to characters
-# df_output = test_data
-# df_output[i] <- lapply(df_output[i], as.character)
-
-
-
-# Next Steps: improvements
-
-# more specific indicators for vehicle conditions
-# handle sparse data
-# convert remaining factors to numericals? i.e. 
 
 # Visualize Predictors -----------------------------------------------------
 
