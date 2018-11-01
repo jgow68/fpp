@@ -12,6 +12,9 @@
 # data = read.csv("ConsolAD_Jun18.csv")
 # data = read.csv('ConsolAD_Jul18.csv', encoding = 'UTF-8')
 # testing fork
+
+rm(data)
+
 data = read.csv('ConsolAD_17Oct_2018.csv', encoding = 'UTF-8')
 verify_data = read.csv("DisposalTemplate_31Oct.csv")
 
