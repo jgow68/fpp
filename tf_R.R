@@ -10,19 +10,33 @@ library(keras)
 #hello <- tf$constant('Hello, TensorFlow!')
 #sess$run(hello)
 
+<<<<<<< HEAD
 # use dataframe prepared for h2o.ai
 str(df_train$Brand)
 str(df_pred)
 colnames(df_train)
+=======
+# # use dataframe prepared for h2o.ai
+# str(df_train)
+# str(df_pred)
+>>>>>>> b2fdf41e0448519d2db18d16c9022cc27b10ed98
 
-library(caret)
-set.seed(123)
-trainIndex <- createDataPartition(df_train$Variant, p = .8, 
-                                  list = FALSE, 
-                                  times = 1)
+# library(caret)
+# set.seed(123)
+# trainIndex <- createDataPartition(df_train$Variant, p = .8, 
+#                                   list = FALSE, 
+#                                   times = 1)
+# 
+# df_split_train = df_train[trainIndex, ]
+# df_split_valid = df_train[-trainIndex, ]
 
-df_split_train = df_train[trainIndex, ]
-df_split_valid = df_train[-trainIndex, ]
+
+
+# use files split by caret ------------------------------------------------
+
+str(df_split_train)
+str(df_split_valid)
+str(df_split_test)
 
 
 # Data Prep ---------------------------------------------------------------
@@ -33,11 +47,39 @@ train_labels = df_split_train[, 1]
 
 # train_data = data.matrix(df_train[, -1])
 # create dummy variable for categorical variables
+<<<<<<< HEAD
 fct_col = model.matrix( ~ Brand + Model_Grp + Variant +
                           Elect.R + Eng.R + Ext.R + Gearb.R +
                           Int.R + UC.R +Struct.R + Flood.R + Mileage_yr_Grp - 1, 
                         data=df_split_train
                       ) # Note if N/A available, errors may occur, i.e. random 0/1, soln is to code NA to smth else
+=======
+
+factor_list = sapply(df_split_train[, -1], is.factor)
+Factor_names = names(factor_list[factor_list == TRUE])
+NonFactor_names = names(factor_list[factor_list == FALSE])
+
+category_formula = as.character()
+for (i in Factor_names){
+  category_formula = paste(i, category_formula)
+}
+category_formula = trimws(category_formula)
+category_formula = gsub(" ", "+", category_formula)
+
+Category_col = model.matrix(as.formula(paste("~", category_formula, "-1")), 
+  data=df_split_train)[, -1]
+NonCategory_col = df_split_train[NonFactor_names]
+
+train_data = cbind(Category_col, NonCategory_col)
+typeof(train_data)
+
+typeof(list(train_data, train_labels))
+# Note if N/A available, errors may occur, i.e. random 0/1, soln is to code NA to smth else
+# fct_col = model.matrix( ~ Brand + Model_Grp + Variant +
+#                           Elect.R + Eng.R + Ext.R + Gearb.R +
+#                           Int.R + UC.R +Struct.R + Flood.R + Mileage_yr_Grp - 1, 
+#                         data=df_split_train)[, -1] 
+>>>>>>> b2fdf41e0448519d2db18d16c9022cc27b10ed98
 
 # alternate soln for dummy var
 # binom <- data.frame(data=runif(1e5),type=sample(0:4,1e5,TRUE))
@@ -66,6 +108,9 @@ num_col_valid = as.matrix(sapply(df_split_valid[, c(6, 7, 8, 9, 19:27)], as.nume
 num_col_yr_valid = as.numeric(df_split_valid$Manf.Yr)
 
 test_data = cbind(fct_col_valid, num_col_valid, num_col_yr_valid) # merge data in matrix form
+
+# Data Pre-Processing -----------------------------------------------------
+
 
 # Normalize data (suggested by keras rstudio), for faster convergence?
 # Test data not used when calculating mean / std
