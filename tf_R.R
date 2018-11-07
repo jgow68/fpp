@@ -11,8 +11,9 @@ library(keras)
 #sess$run(hello)
 
 # use dataframe prepared for h2o.ai
-str(df_train)
+str(df_train$Brand)
 str(df_pred)
+colnames(df_train)
 
 library(caret)
 set.seed(123)
@@ -36,7 +37,7 @@ fct_col = model.matrix( ~ Brand + Model_Grp + Variant +
                           Elect.R + Eng.R + Ext.R + Gearb.R +
                           Int.R + UC.R +Struct.R + Flood.R + Mileage_yr_Grp - 1, 
                         data=df_split_train
-                      )[, -1] # Note if N/A available, errors may occur, i.e. random 0/1, soln is to code NA to smth else
+                      ) # Note if N/A available, errors may occur, i.e. random 0/1, soln is to code NA to smth else
 
 # alternate soln for dummy var
 # binom <- data.frame(data=runif(1e5),type=sample(0:4,1e5,TRUE))
@@ -59,7 +60,7 @@ test_labels = df_split_valid[, 1]
 fct_col_valid = model.matrix( ~ Brand + Model_Grp + Variant +
                           Elect.R + Eng.R + Ext.R + Gearb.R +
                           Int.R + UC.R +Struct.R + Flood.R + Mileage_yr_Grp - 1, 
-                        data=df_split_valid)[, -1]
+                        data=df_split_valid)
 
 num_col_valid = as.matrix(sapply(df_split_valid[, c(6, 7, 8, 9, 19:27)], as.numeric))
 num_col_yr_valid = as.numeric(df_split_valid$Manf.Yr)
@@ -79,24 +80,30 @@ col_means_train <- attr(train_data, "scaled:center")
 col_stddevs_train <- attr(train_data, "scaled:scale")
 test_data <- scale(test_data, center = col_means_train, scale = col_stddevs_train)
 
-
-# (Not required?) split dataset into training and validation set, set during training process
+colnames(train_data)
+ncol(train_data)
+ncol(test_data)
 
 
 # Build Model -------------------------------------------------------------
 
+# create metric using backend tensor functions
+metric_rmse <- custom_metric("rmse", 
+                                  function(y_true, y_pred) {k_sqrt(k_mean((y_pred-y_true)^2))})
+
 build_model <- function() {
   
   model <- keras_model_sequential() %>%
-    layer_dense(units = 512, activation = "relu",
+    layer_dense(units = 32, activation = "relu",
                 input_shape = dim(train_data)[2]) %>%
-    layer_dense(units = 512, activation = "relu") %>%
+    layer_dense(units = 32, activation = "relu") %>%
+    layer_dense(units = 32, activation = "relu") %>%
     layer_dense(units = 1)
   
   model %>% compile(
     loss = "mse",
     optimizer = optimizer_rmsprop(),
-    metrics = list("mean_absolute_error")
+    metrics = list("mean_absolute_error", metric_rmse)
   )
   
   model
@@ -134,7 +141,7 @@ library(ggplot2)
 plot(history, metrics = "mean_absolute_error", smooth = FALSE) +
   coord_cartesian(ylim = c(0, 5000))
 
-# valiadation errors roughly similar after 300 epochs
+# valiadation errors increased after ~100 epochs
 
 # set stopping criteria
 
@@ -146,8 +153,9 @@ model <- build_model()
 history <- model %>% fit(
   train_data,
   train_labels,
-  epochs = epochs,
-  validation_split = 0.2,
+  epochs = 500,
+  #validation_split = 0.2,
+  validation_data = list(test_data, test_labels),
   verbose = 0,
   callbacks = list(early_stop, print_dot_callback)
 )
@@ -156,16 +164,20 @@ plot(history, metrics = "mean_absolute_error", smooth = FALSE) +
   coord_cartesian(xlim = c(0, 150), ylim = c(0, 5000))
 # model stop at avg error of 1.5k
 
-# check performance vs test set (here test set is with actual response variables)
-# N/A for our data
-#c(loss, mae) %<-% (model %>% evaluate(test_data, test_labels, verbose = 0))
-#paste0("Mean absolute error on test set: $", sprintf("%.2f", mae * 1000))
+# check performance vs test set (validation set)
 
-# predictions for test set
+c(loss, mae) %<-% (model %>% evaluate(test_data, test_labels, verbose = 0))
+paste0("Mean absolute error on test set: $", sprintf("%.2f", mae))
+
+# predictions for test (validation) set (Nid to update to prediction set)
 
 test_predictions <- model %>% predict(test_data)
 test_predictions
+str(test_data)
+test_labels
+colnames(train_data)
 
+test_data$Brand <- names(test_data[1:5])[max.col(test_data[1:5])]
 
 # Try over/under fit models -----------------------------------------------
 
